@@ -20,6 +20,7 @@
     "lint-fix": "eslint --fix \"packages/**/*.{mts,ts,tsx}\" \"apps/**/*.{mts,ts,tsx}\"",
     "prettier-check": "prettier --check packages/ apps/",
     "prettier-fix": "prettier --write packages/ apps/",
+    "demo": "bash scripts/demo.sh",
     "dev": "tsc --build && node build/apps/api-server/simpledbmsd.mjs",
     "bench:compression": "tsx packages/benchmarks/compression-algorithm-bench.mts",
     "bench:compression:quick": "tsx packages/benchmarks/compression-algorithm-bench.mts --quick",
