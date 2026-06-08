@@ -599,6 +599,19 @@ export class Collection {
   }
 
   /**
+   * Returns every document ID paired with the block ID where its blob starts
+   * on the heap.  Used by inspection and demo tooling.
+   */
+  async getDocumentBlockIds(): Promise<Array<{ docId: string; startBlockId: number }>> {
+    const result: Array<{ docId: string; startBlockId: number }> = [];
+    const primaryTree = this.indexes.get('id')!;
+    for await (const { key: docId, value: startBlockId } of primaryTree.entries()) {
+      result.push({ docId, startBlockId });
+    }
+    return result;
+  }
+
+  /**
    * Iterates over all documents in the collection as key-value pairs.
    */
   async *entries(): AsyncGenerator<{ key: string; value: Document }, void, unknown> {

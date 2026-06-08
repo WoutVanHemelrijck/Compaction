@@ -710,4 +710,47 @@ export class FreeBlockFile {
   getFile(): File {
     return this.file;
   }
+
+  /**
+   * Returns every block ID in the free list by walking the chain from the
+   * cached free-list head.  Reads the committed file only (no staged writes).
+   */
+  async getFreeBlockIds(): Promise<number[]> {
+    this.ensureOpened();
+    const freeIds: number[] = [];
+    const visited = new Set<number>();
+    let current = this.cachedFreeListHead;
+    const st = await this.file.stat();
+    while (current !== NO_BLOCK && !visited.has(current)) {
+      if (current * this.blockSize >= st.size) break;
+      visited.add(current);
+      freeIds.push(current);
+      const buf = Buffer.alloc(NEXT_POINTER_SIZE);
+      await this.file.read(buf, { position: current * this.blockSize });
+      current = buf.readUInt32LE(0);
+    }
+    return freeIds;
+  }
+
+  /**
+   * Returns every block ID in the blob chain that starts at startBlockId,
+   * following nextPtr until NO_BLOCK.
+   */
+  async getBlockChain(startBlockId: number): Promise<number[]> {
+    this.ensureOpened();
+    if (startBlockId === NO_BLOCK) return [];
+    const chain: number[] = [];
+    const visited = new Set<number>();
+    const st = await this.file.stat();
+    const totalBlocks = Math.floor(st.size / this.blockSize);
+    let current = startBlockId;
+    while (current !== NO_BLOCK && current < totalBlocks && !visited.has(current)) {
+      visited.add(current);
+      chain.push(current);
+      const buf = Buffer.alloc(NEXT_POINTER_SIZE);
+      await this.file.read(buf, { position: current * this.blockSize });
+      current = buf.readUInt32LE(0);
+    }
+    return chain;
+  }
 }

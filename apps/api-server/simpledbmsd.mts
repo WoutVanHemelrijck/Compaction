@@ -2330,6 +2330,99 @@ export function spawnDaemon(port: number, nodeId: string, wellKnownPeers: { id: 
 
 *********************************************/
   /**
+   * GET /db/demo/heap-inspect/:collection
+   * Returns a read-only snapshot of the document heap for the given collection:
+   * which blocks are free, which belong to which document, and summary stats.
+   * No authentication required — intended for the compaction demo UI.
+   */
+  app.get('/db/demo/heap-inspect/:collection', async (req, res) => {
+    try {
+      const collectionName = req.params.collection;
+
+      const collectionNames = await db.getCollectionNames();
+      if (!collectionNames.includes(collectionName)) {
+        res.json({
+          ok: true,
+          collectionName,
+          totalBlocks: 1,
+          blockSize: 4096,
+          fileSizeBytes: 4096,
+          freeBlockCount: 0,
+          liveBlockCount: 0,
+          otherBlockCount: 0,
+          fragmentationPct: 0,
+          freeBlockIds: [],
+          documents: [],
+          blocks: [{ id: 0, type: 'header' }],
+        });
+        return;
+      }
+
+      const collection = await db.getCollection(collectionName);
+      const heap = collection.getDocumentHeap();
+
+      const totalBlocks = await heap.getTotalBlockCount();
+      const blockSize = heap.blockSize;
+      const fileSizeBytes = totalBlocks * blockSize;
+
+      const freeBlockIds = await heap.getFreeBlockIds();
+      const freeSet = new Set(freeBlockIds);
+
+      const docEntries = await collection.getDocumentBlockIds();
+      const documents: Array<{ docId: string; startBlockId: number; blockIds: number[]; data: Record<string, unknown> | null }> = [];
+      const docBlockMap = new Map<number, string>();
+
+      for (const { docId, startBlockId } of docEntries) {
+        const blockIds = await heap.getBlockChain(startBlockId);
+        let data: Record<string, unknown> | null = null;
+        try {
+          const buf = await heap.readBlob(startBlockId);
+          if (buf.length > 0) data = JSON.parse(buf.toString()) as Record<string, unknown>;
+        } catch { /* skip */ }
+        documents.push({ docId, startBlockId, blockIds, data });
+        for (const bid of blockIds) docBlockMap.set(bid, docId);
+      }
+
+      const blocks: Array<{ id: number; type: string; docId?: string }> = [];
+      for (let i = 0; i < totalBlocks; i++) {
+        if (i === 0) {
+          blocks.push({ id: i, type: 'header' });
+        } else if (freeSet.has(i)) {
+          blocks.push({ id: i, type: 'free' });
+        } else if (docBlockMap.has(i)) {
+          blocks.push({ id: i, type: 'document', docId: docBlockMap.get(i) });
+        } else {
+          blocks.push({ id: i, type: 'other' });
+        }
+      }
+
+      const liveBlockCount = blocks.filter(b => b.type === 'document').length;
+      const otherBlockCount = blocks.filter(b => b.type === 'other').length;
+      const usableBlocks = totalBlocks - 1; // exclude header
+      const fragmentationPct = usableBlocks > 0
+        ? Math.round((freeBlockIds.length / usableBlocks) * 100)
+        : 0;
+
+      res.json({
+        ok: true,
+        collectionName,
+        totalBlocks,
+        blockSize,
+        fileSizeBytes,
+        freeBlockCount: freeBlockIds.length,
+        liveBlockCount,
+        otherBlockCount,
+        fragmentationPct,
+        freeBlockIds,
+        documents,
+        blocks,
+      });
+    } catch (error) {
+      res.status(500).json({ ok: false, error: (error as Error).message });
+    }
+  });
+
+  /**
    * @swagger
    * /db/compact:
    *   post:
