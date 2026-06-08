@@ -1,0 +1,7 @@
+{
+  "name": "simpledbms-benchmarks",
+  "version": "1.0.0",
+  "description": "Performance benchmarks for SimpleDBMS",
+  "license": "ISC",
+  "type": "module"
+}

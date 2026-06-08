@@ -1,0 +1,7 @@
+{
+  "name": "simpledbms-nlp",
+  "version": "1.0.0",
+  "description": "NLP, vector search (HNSW), n-gram indexing and RAG agent for SimpleDBMS",
+  "license": "ISC",
+  "type": "module"
+}

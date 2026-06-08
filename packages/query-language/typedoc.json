@@ -1,0 +1,8 @@
+{
+  "name": "Query Language",
+  "entryPoints": ["index.mts"],
+  "tsconfig": "./tsconfig.json",
+  "excludePrivate": true,
+  "excludeInternal": true,
+  "out": "../../docs/query-language"
+}

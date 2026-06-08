@@ -1,0 +1,774 @@
+// @author Mathias Bouhon Keulen
+// @date 2026-03-20
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { LogManager } from './LogManager';
+import { LogEntry, Command, LogEntryType } from './LogEntry';
+import { InMemoryLogStorage } from '../storage/inMemory/InMemoryLogStorage';
+import { LogInconsistencyError, StorageError } from '../util/Error';
+import { LogStorageMeta } from '../storage/interfaces/LogStorage';
+import { RaftEventBus } from '../events/RaftEvents';
+
+describe('LogManager.ts, LogManager', () => {
+  let logStorage: InMemoryLogStorage;
+
+  let logManager: LogManager;
+
+  const validCommand: Command = { type: 'set', payload: { key: 'x', value: '10' } };
+  const validCommand2: Command = { type: 'set', payload: { key: 'y', value: '20' } };
+  const validCommand3: Command = { type: 'delete', payload: { key: 'x' } };
+  const validCommand4: Command = { type: 'set', payload: { key: 'x', value: '10' } };
+
+  const validLogEntry: LogEntry = { index: 1, term: 1, type: LogEntryType.COMMAND, command: validCommand };
+  const validLogEntry2: LogEntry = { index: 2, term: 1, type: LogEntryType.COMMAND, command: validCommand2 };
+  const validLogEntry3: LogEntry = { index: 3, term: 1, type: LogEntryType.COMMAND, command: validCommand3 };
+  const validLogEntry4: LogEntry = { index: 4, term: 2, type: LogEntryType.COMMAND, command: validCommand4 };
+
+  const invalidLogEntry: LogEntry = { index: 3, term: 1, type: LogEntryType.COMMAND, command: validCommand };
+
+  const emptyEntries: LogEntry[] = [];
+
+  const validEntries: LogEntry[] = [validLogEntry, validLogEntry2, validLogEntry3, validLogEntry4];
+
+  const invalidEntries: LogEntry[] = [validLogEntry, invalidLogEntry, validLogEntry3];
+
+  class FailingStorage extends InMemoryLogStorage {
+    readMeta(): Promise<LogStorageMeta> {
+      return Promise.reject(new StorageError('Storage read error'));
+    }
+  }
+
+  class FailingStorage2 extends InMemoryLogStorage {
+    readMeta(): Promise<LogStorageMeta> {
+      return Promise.reject(new LogInconsistencyError('Log inconsistency error'));
+    }
+  }
+
+  class FailingStorage3 extends InMemoryLogStorage {
+    readMeta(): Promise<LogStorageMeta> {
+      return Promise.reject(new Error('Unexpected error'));
+    }
+  }
+
+  beforeEach(async () => {
+    logStorage = new InMemoryLogStorage();
+    await logStorage.open();
+    logManager = new LogManager(logStorage);
+  });
+
+  it('should create a LogManager instance', () => {
+    expect(logManager).toBeInstanceOf(LogManager);
+  });
+
+  it('should initialize correctly and have empty log', async () => {
+    await logManager.initialize();
+    expect(logManager.getLastIndex()).toBe(0);
+    expect(logManager.getLastTerm()).toBe(0);
+  });
+
+  it('should return when re-initializing', async () => {
+    await logManager.initialize();
+    const result = await logManager.initialize();
+    expect(result).toBeUndefined();
+  });
+
+  it('should throw when appending entry before initialization', async () => {
+    await expect(logManager.appendEntry(validLogEntry)).rejects.toThrow('LogManager is not initialized');
+  });
+
+  it('should append a valid log entry', async () => {
+    await logManager.initialize();
+    await logManager.appendEntry(validLogEntry);
+    expect(logManager.getLastIndex()).toBe(1);
+    expect(logManager.getLastTerm()).toBe(1);
+  });
+
+  it('should throw when appending an invalid log entry', async () => {
+    await logManager.initialize();
+    await expect(logManager.appendEntry(invalidLogEntry)).rejects.toThrow(
+      'Entry index 3 does not match expected index 1',
+    );
+    await logManager.appendEntry(validLogEntry);
+    await expect(logManager.appendEntry(invalidLogEntry)).rejects.toThrow(
+      'Entry index 3 does not match expected index 2',
+    );
+  });
+
+  it('should return last index on empty entries appendEntries', async () => {
+    await logManager.initialize();
+    const result = await logManager.appendEntries(emptyEntries);
+    expect(result).toBe(0);
+    await logManager.appendEntry(validLogEntry);
+    const result2 = await logManager.appendEntries(emptyEntries);
+    expect(result2).toBe(1);
+  });
+
+  it('should append valid log entries with appendEntries', async () => {
+    await logManager.initialize();
+    const result = await logManager.appendEntries(validEntries);
+    expect(result).toBe(4);
+    expect(logManager.getLastIndex()).toBe(4);
+    expect(logManager.getLastTerm()).toBe(2);
+  });
+
+  it('should throw when appending invalid log entries with appendEntries', async () => {
+    await logManager.initialize();
+    await expect(logManager.appendEntries(invalidEntries)).rejects.toThrow(
+      'Entry index 3 does not match expected index 2',
+    );
+    expect(logManager.getLastIndex()).toBe(0);
+    expect(logManager.getLastTerm()).toBe(0);
+  });
+
+  it('should get an existing entry', async () => {
+    await logManager.initialize();
+    await logManager.appendEntry(validLogEntry);
+    const entry = await logManager.getEntry(1);
+    expect(entry).toEqual(validLogEntry);
+  });
+
+  it('should return null for getting non-existing entry', async () => {
+    await logManager.initialize();
+    const entry = await logManager.getEntry(1);
+    expect(entry).toBeNull();
+  });
+
+  it('should return null for getting entry with index < 1', async () => {
+    await logManager.initialize();
+    const entry = await logManager.getEntry(0);
+    expect(entry).toBeNull();
+  });
+
+  it('should return null for getting entry with index > last index', async () => {
+    await logManager.initialize();
+    await logManager.appendEntry(validLogEntry);
+    const entry = await logManager.getEntry(2);
+    expect(entry).toBeNull();
+  });
+
+  it('should get existing entries in range', async () => {
+    await logManager.initialize();
+    await logManager.appendEntries(validEntries);
+    const entries = await logManager.getEntries(2, 3);
+    expect(entries).toEqual([validLogEntry2, validLogEntry3]);
+  });
+
+  it('should throw when getting entries with fromIndex < 1', async () => {
+    await logManager.initialize();
+    await expect(logManager.getEntries(0, 2)).rejects.toThrow('Invalid index range: from 0 to 2');
+  });
+
+  it('should throw when getting entries with toIndex > last index', async () => {
+    await logManager.initialize();
+    await logManager.appendEntry(validLogEntry);
+    await expect(logManager.getEntries(1, 2)).rejects.toThrow('Invalid index range: from 1 to 2');
+  });
+
+  it('should throw when getting entries with fromIndex > toIndex', async () => {
+    await logManager.initialize();
+    await logManager.appendEntries(validEntries);
+    await expect(logManager.getEntries(3, 2)).rejects.toThrow('Invalid index range: from 3 to 2');
+  });
+
+  it('should throw when getting first index when log is empty', async () => {
+    await logManager.initialize();
+    expect(() => logManager.getFirstIndex()).toThrow('No log entries found');
+  });
+
+  it('should return first index when log is not empty', async () => {
+    await logManager.initialize();
+    await logManager.appendEntries(validEntries);
+    const firstIndex = logManager.getFirstIndex();
+    expect(firstIndex).toBe(1);
+  });
+
+  it('should get term at index', async () => {
+    await logManager.initialize();
+    await logManager.appendEntries(validEntries);
+    const term = await logManager.getTermAtIndex(3);
+    expect(term).toBe(1);
+  });
+
+  it('should return null for get term at index for non-existing entry', async () => {
+    await logManager.initialize();
+    const term = await logManager.getTermAtIndex(1);
+    expect(term).toBeNull();
+  });
+
+  it('should return true for hasMatchingEntry for 0 index', async () => {
+    await logManager.initialize();
+    const hasEntry = await logManager.hasMatchingEntry(0, 2);
+    expect(hasEntry).toBe(true);
+  });
+
+  it('should return true for hasMatchingEntry for a matching entry', async () => {
+    await logManager.initialize();
+    await logManager.appendEntry(validLogEntry);
+    const hasEntry = await logManager.hasMatchingEntry(1, 1);
+    expect(hasEntry).toBe(true);
+  });
+
+  it('should return false for hasMatchingEntry for non-existing entry', async () => {
+    await logManager.initialize();
+    const hasEntry = await logManager.hasMatchingEntry(1, 1);
+    expect(hasEntry).toBe(false);
+  });
+
+  it('should return false for hasMatchingEntry for non-matching term', async () => {
+    await logManager.initialize();
+    await logManager.appendEntry(validLogEntry);
+    const hasEntry = await logManager.hasMatchingEntry(1, 2);
+    expect(hasEntry).toBe(false);
+  });
+
+  it('should return null for getting last term when log is empty', async () => {
+    await logManager.initialize();
+    const lastTerm = logManager.getLastTerm();
+    expect(lastTerm).toBe(0);
+  });
+
+  it('should return null for getting last entry when log is empty', async () => {
+    await logManager.initialize();
+    const lastEntry = await logManager.getLastEntry();
+    expect(lastEntry).toBeNull();
+  });
+
+  it('should return last entry when getting last entry', async () => {
+    await logManager.initialize();
+    await logManager.appendEntries(validEntries);
+    const lastEntry = await logManager.getLastEntry();
+    expect(lastEntry).toEqual(validLogEntry4);
+  });
+
+  it('should return last index when getting last index', async () => {
+    await logManager.initialize();
+    const lastIndex = logManager.getLastIndex();
+    expect(lastIndex).toBe(0);
+    await logManager.appendEntries(validEntries);
+    const lastIndexAfterAppend = logManager.getLastIndex();
+    expect(lastIndexAfterAppend).toBe(4);
+  });
+
+  it('should return last term when getting last term', async () => {
+    await logManager.initialize();
+    const lastTerm = logManager.getLastTerm();
+    expect(lastTerm).toBe(0);
+    await logManager.appendEntries(validEntries);
+    const lastTermAfterAppend = logManager.getLastTerm();
+    expect(lastTermAfterAppend).toBe(2);
+  });
+
+  it('should throw when deleting entries from index < 1', async () => {
+    await logManager.initialize();
+    await expect(logManager.deleteEntriesFrom(0)).rejects.toThrow(
+      'Cannot delete from index 0 as it is less than or equal to snapshot index 0',
+    );
+  });
+
+  it('should throw when deleting entries from index > last index', async () => {
+    await logManager.initialize();
+    await logManager.appendEntry(validLogEntry);
+    await expect(logManager.deleteEntriesFrom(2)).rejects.toThrow(
+      'Cannot delete from index 2 as it is beyond last index 1',
+    );
+  });
+
+  it('should delete entries from given index with entries remaining', async () => {
+    await logManager.initialize();
+    await logManager.appendEntries(validEntries);
+    await logManager.deleteEntriesFrom(3);
+    expect(logManager.getLastIndex()).toBe(2);
+    expect(logManager.getLastTerm()).toBe(1);
+    const entry2 = await logManager.getEntry(2);
+    expect(entry2).toEqual(validLogEntry2);
+    const entry3 = await logManager.getEntry(3);
+    expect(entry3).toBeNull();
+  });
+
+  it('should delete entries from given index with no entries remaining', async () => {
+    await logManager.initialize();
+    await logManager.appendEntries(validEntries);
+    await logManager.deleteEntriesFrom(1);
+    expect(logManager.getLastIndex()).toBe(0);
+    expect(logManager.getLastTerm()).toBe(0);
+    const entry1 = await logManager.getEntry(1);
+    expect(entry1).toBeNull();
+  });
+
+  it('should clear an already empty log', async () => {
+    await logManager.initialize();
+    await logManager.clear();
+    expect(logManager.getLastIndex()).toBe(0);
+    expect(logManager.getLastTerm()).toBe(0);
+  });
+
+  it('should clear the log', async () => {
+    await logManager.initialize();
+    await logManager.appendEntries(validEntries);
+    await logManager.clear();
+    expect(logManager.getLastIndex()).toBe(0);
+    expect(logManager.getLastTerm()).toBe(0);
+    const entry1 = await logManager.getEntry(1);
+    expect(entry1).toBeNull();
+  });
+
+  it('should throw StorageError when underlying storage throws a StorageError', async () => {
+    const failingStorage = new FailingStorage();
+    await failingStorage.open();
+    const logManagerWithFailingStorage = new LogManager(failingStorage);
+    await expect(logManagerWithFailingStorage.initialize()).rejects.toThrow('Storage read error');
+  });
+
+  it('should throw a LogInconsistencyError when underlying storage throws a LogInconsistencyError', async () => {
+    const failingStorage = new FailingStorage2();
+    await failingStorage.open();
+    const logManagerWithFailingStorage = new LogManager(failingStorage);
+    await expect(logManagerWithFailingStorage.initialize()).rejects.toThrow('Log inconsistency error');
+  });
+
+  it('should throw a StorageError when underlying storage throws an unexpected error', async () => {
+    const failingStorage = new FailingStorage3();
+    await failingStorage.open();
+    const logManagerWithFailingStorage = new LogManager(failingStorage);
+    await expect(logManagerWithFailingStorage.initialize()).rejects.toThrow(
+      'Storage operation failed in context: initialize',
+    );
+  });
+
+  it('should throw when not initialized for getEntriesFromIndex', async () => {
+    await expect(logManager.getEntriesFromIndex(1)).rejects.toThrow('LogManager is not initialized');
+  });
+
+  it('should throw when index < 1 for getEntriesFromIndex', async () => {
+    await logManager.initialize();
+    await expect(logManager.getEntriesFromIndex(0)).rejects.toThrow(
+      'Invalid fromIndex: 0 is less than or equal to snapshot index 0',
+    );
+  });
+
+  it('should return empty array for getEntriesFromIndex when fromIndex > last index', async () => {
+    await logManager.initialize();
+    await logManager.appendEntry(validLogEntry);
+    const entries = await logManager.getEntriesFromIndex(2);
+    expect(entries).toEqual([]);
+  });
+
+  it('should return all entries from given index for getEntriesFromIndex', async () => {
+    await logManager.initialize();
+    await logManager.appendEntries(validEntries);
+    const entries = await logManager.getEntriesFromIndex(2);
+    expect(entries).toEqual([validLogEntry2, validLogEntry3, validLogEntry4]);
+  });
+
+  it('should return all entries when index is 1 for getEntriesFromIndex', async () => {
+    await logManager.initialize();
+    await logManager.appendEntries(validEntries);
+    const entries = await logManager.getEntriesFromIndex(1);
+    expect(entries).toEqual(validEntries);
+  });
+
+  it('should return single entry when index equals lastIndex for getEntriesFromIndex', async () => {
+    await logManager.initialize();
+    await logManager.appendEntries(validEntries);
+    const entries = await logManager.getEntriesFromIndex(4);
+    expect(entries).toEqual([validLogEntry4]);
+  });
+
+  it('should throw when not initialized for appendEntriesFrom', async () => {
+    await expect(logManager.appendEntriesFrom(1, validEntries)).rejects.toThrow('LogManager is not initialized');
+  });
+
+  it('should return lastIndex when entries is empty for appendEntriesFrom', async () => {
+    await logManager.initialize();
+    const result = await logManager.appendEntriesFrom(1, []);
+    expect(result).toBe(0);
+  });
+
+  it('should append new entries that do not exist in the log for appendEntriesFrom', async () => {
+    await logManager.initialize();
+    const result = await logManager.appendEntriesFrom(2, validEntries);
+    expect(result).toBe(4);
+    expect(logManager.getLastIndex()).toBe(4);
+  });
+
+  it('should skip entries that already exist in the log with matching term for appendEntriesFrom', async () => {
+    await logManager.initialize();
+    await logManager.appendEntries(validEntries);
+    const newEntry5: LogEntry = { index: 5, term: 2, type: LogEntryType.COMMAND, command: validCommand };
+    const result = await logManager.appendEntriesFrom(2, [validLogEntry, validLogEntry2, newEntry5]);
+    expect(result).toBe(5);
+    expect(logManager.getLastIndex()).toBe(5);
+  });
+
+  it('should truncate from conflict index when term mismatches and append new entries for appendEntriesFrom', async () => {
+    await logManager.initialize();
+    await logManager.appendEntries(validEntries);
+    const conflictingEntry3: LogEntry = { index: 3, term: 3, type: LogEntryType.COMMAND, command: validCommand3 };
+    const newEntry4: LogEntry = { index: 4, term: 3, type: LogEntryType.COMMAND, command: validCommand4 };
+    const result = await logManager.appendEntriesFrom(2, [conflictingEntry3, newEntry4]);
+    expect(result).toBe(4);
+    expect(logManager.getLastIndex()).toBe(4);
+
+    const entry3 = await logManager.getEntry(3);
+    expect(entry3).toEqual(conflictingEntry3);
+  });
+
+  it('should return last index when all entries match for appendEntriesFrom', async () => {
+    await logManager.initialize();
+    await logManager.appendEntries(validEntries);
+    const result = await logManager.appendEntriesFrom(1, validEntries);
+    expect(result).toBe(4);
+    expect(logManager.getLastIndex()).toBe(4);
+  });
+
+  it('should throw when not initialized for matchesPrevLog', async () => {
+    await expect(logManager.matchesPrevLog(1, 1)).rejects.toThrow('LogManager is not initialized');
+  });
+
+  it('should return true when prevLogIndex is 0 and prevlogTerm is 0', async () => {
+    await logManager.initialize();
+    const matches = await logManager.matchesPrevLog(0, 0);
+    expect(matches).toBe(true);
+  });
+
+  it('should return false when prevlogIndex is 0 and prevLogTerm is not 0', async () => {
+    await logManager.initialize();
+    const matches = await logManager.matchesPrevLog(0, 1);
+    expect(matches).toBe(false);
+  });
+
+  it('should return false when entry does not exist at prevLogIndex for matchesPrevLog', async () => {
+    await logManager.initialize();
+    const matches = await logManager.matchesPrevLog(1, 1);
+    expect(matches).toBe(false);
+  });
+
+  it('should return true when entry exists and term matches for matchesPrevLog', async () => {
+    await logManager.initialize();
+    await logManager.appendEntry(validLogEntry);
+    const matches = await logManager.matchesPrevLog(1, 1);
+    expect(matches).toBe(true);
+  });
+
+  it('should return false when entry exists but term does not match for matchesPrevLog', async () => {
+    await logManager.initialize();
+    await logManager.appendEntry(validLogEntry);
+    const matches = await logManager.matchesPrevLog(1, 2);
+    expect(matches).toBe(false);
+  });
+
+  it('should throw when not initialized for getConflictInfo', async () => {
+    await expect(logManager.getConflictInfo(1)).rejects.toThrow('LogManager is not initialized');
+  });
+
+  it('should return lastIndex + 1 with term 0 when prevLogIndex is beyond last index for getConflictInfo', async () => {
+    await logManager.initialize();
+    await logManager.appendEntries(validEntries);
+    const result = await logManager.getConflictInfo(5);
+    expect(result).toEqual({ conflictIndex: 5, conflictTerm: 0 });
+  });
+
+  it('should return lastIndex + 1 with term 0 when entry is missing at prevLogIndex for getConflictInfo', async () => {
+    await logManager.initialize();
+    await logManager.appendEntry(validLogEntry);
+    logManager['lastIndex'] = 2;
+    const result = await logManager.getConflictInfo(2);
+    expect(result).toEqual({ conflictIndex: 3, conflictTerm: 0 });
+  });
+
+  it('should return first index of conflicting term when all previous entries have same term', async () => {
+    await logManager.initialize();
+    await logManager.appendEntries([validLogEntry, validLogEntry2, validLogEntry3]);
+    const result = await logManager.getConflictInfo(3);
+    expect(result).toEqual({ conflictIndex: 1, conflictTerm: 1 });
+  });
+
+  it('should stop walking back when previous entry has different term', async () => {
+    await logManager.initialize();
+    const entryTerm2: LogEntry = { index: 2, term: 2, type: LogEntryType.COMMAND, command: validCommand2 };
+    const entryTerm2_2: LogEntry = { index: 3, term: 2, type: LogEntryType.COMMAND, command: validCommand3 };
+    await logManager.appendEntries([validLogEntry, entryTerm2, entryTerm2_2]);
+    const result = await logManager.getConflictInfo(3);
+    expect(result).toEqual({ conflictIndex: 2, conflictTerm: 2 });
+  });
+
+  it('should return the entry itsself when prevLogIndes is 1', async () => {
+    await logManager.initialize();
+    await logManager.appendEntry(validLogEntry);
+    const result = await logManager.getConflictInfo(1);
+    expect(result).toEqual({ conflictIndex: 1, conflictTerm: 1 });
+  });
+
+  it('should throw when not initialized for appendCommand', async () => {
+    await expect(logManager.appendCommand(validCommand, 1)).rejects.toThrow('LogManager is not initialized');
+  });
+
+  it('should append a command and return the new index', async () => {
+    await logManager.initialize();
+    const newIndex = await logManager.appendCommand(validCommand, 1);
+    expect(newIndex).toBe(1);
+    const entry = await logManager.getEntry(1);
+    expect(entry).toEqual({ index: 1, term: 1, type: LogEntryType.COMMAND, command: validCommand });
+  });
+
+  it('should append multiple commmands with incrementing indices', async () => {
+    await logManager.initialize();
+    const index1 = await logManager.appendCommand(validCommand, 1);
+    const index2 = await logManager.appendCommand(validCommand2, 1);
+    const index3 = await logManager.appendCommand(validCommand3, 2);
+    expect(index1).toBe(1);
+    expect(index2).toBe(2);
+    expect(index3).toBe(3);
+    expect(logManager.getLastTerm()).toBe(2);
+  });
+
+  it('should store the correct entry content', async () => {
+    await logManager.initialize();
+    await logManager.appendCommand(validCommand, 3);
+    const entry = await logManager.getEntry(1);
+    expect(entry).toEqual({ index: 1, term: 3, type: LogEntryType.COMMAND, command: validCommand });
+  });
+
+  it('should restore snapshotIndex from storage on initialize', async () => {
+    await logStorage.reset(10, 0);
+    logManager = new LogManager(logStorage);
+    await logManager.initialize();
+    expect(logManager.getSnapshotIndex()).toBe(10);
+  });
+
+  it('should restore snapshotIndex and snapshotTerm from storage on initialize', async () => {
+    await logStorage.reset(10, 3);
+    logManager = new LogManager(logStorage);
+    await logManager.initialize();
+    expect(logManager.getSnapshotIndex()).toBe(10);
+    const term = await logManager.getTermAtIndex(10);
+    expect(term).toBe(3);
+  });
+
+  it('should return early when index <= snapshotindex for discardEntriesUpTo', async () => {
+    await logManager.initialize();
+    await logManager.appendEntries(validEntries);
+    logManager['snapshotIndex'] = 3;
+    await logManager.discardEntriesUpTo(2, 1);
+    expect(logManager.getSnapshotIndex()).toBe(3);
+    expect(logManager.getLastIndex()).toBe(4);
+  });
+
+  it('should throw when index > lastindex for discardEntriesUpTo', async () => {
+    await logManager.initialize();
+    await logManager.appendEntries(validEntries);
+    await expect(logManager.discardEntriesUpTo(5, 1)).rejects.toThrow(
+      'Cannot discard up to index 5 as it is beyond last index 4',
+    );
+  });
+
+  it('should discard all entries when index equals lastindex for discardEntriesUpTo', async () => {
+    await logManager.initialize();
+    await logManager.appendEntries(validEntries);
+    await logManager.discardEntriesUpTo(4, 2);
+    expect(logManager.getSnapshotIndex()).toBe(4);
+    expect(logManager.getLastIndex()).toBe(4);
+    expect(logManager.getLastTerm()).toBe(2);
+    const entry = await logManager.getEntry(4);
+    expect(entry).toBeNull();
+  });
+
+  it('should discard entries up to index keeping entries after for discardEntriesUpTo', async () => {
+    await logManager.initialize();
+    await logManager.appendEntries(validEntries);
+    await logManager.discardEntriesUpTo(2, 1);
+    expect(logManager.getSnapshotIndex()).toBe(2);
+    expect(logManager.getLastIndex()).toBe(4);
+    const entry1 = await logManager.getEntry(2);
+    expect(entry1).toBeNull();
+    const entry2 = await logManager.getEntry(3);
+    expect(entry2).toEqual(validLogEntry3);
+  });
+
+  it('should reset log to snapshot state for resetToSnapshot', async () => {
+    await logManager.initialize();
+    await logManager.appendEntries(validEntries);
+    await logManager.resetToSnapshot(10, 3);
+    expect(logManager.getSnapshotIndex()).toBe(10);
+    expect(logManager.getLastIndex()).toBe(10);
+    expect(logManager.getLastTerm()).toBe(3);
+    const entry = await logManager.getEntry(4);
+    expect(entry).toBeNull();
+  });
+
+  it('should reset empty log to snapshot state for resetToSnapshot', async () => {
+    await logManager.initialize();
+    await logManager.resetToSnapshot(5, 2);
+    expect(logManager.getSnapshotIndex()).toBe(5);
+    expect(logManager.getLastIndex()).toBe(5);
+  });
+
+  it('should return snapshot index for getSnapshotIndex', async () => {
+    await logManager.initialize();
+    expect(logManager.getSnapshotIndex()).toBe(0);
+    await logManager.appendEntries(validEntries);
+    await logManager.discardEntriesUpTo(2, 1);
+    expect(logManager.getSnapshotIndex()).toBe(2);
+  });
+
+  it('should return null for getEntry when index <= snapshot index', async () => {
+    await logManager.initialize();
+    await logManager.appendEntries(validEntries);
+    await logManager.discardEntriesUpTo(2, 1);
+    expect(await logManager.getEntry(2)).toBeNull();
+    expect(await logManager.getEntry(1)).toBeNull();
+  });
+
+  it('should return true when index equals snapshotIndex and terms match for hasMatchingEntry', async () => {
+    await logManager.initialize();
+    await logManager.appendEntries(validEntries);
+    await logManager.discardEntriesUpTo(2, 1);
+    expect(await logManager.hasMatchingEntry(2, 1)).toBe(true);
+  });
+
+  it('should return false when index equals snapshotIndex but terms differ for hasMatchingEntry', async () => {
+    await logManager.initialize();
+    await logManager.appendEntries(validEntries);
+    await logManager.discardEntriesUpTo(2, 1);
+    expect(await logManager.hasMatchingEntry(2, 99)).toBe(false);
+  });
+
+  it('should return false when index < snapshotIndex for hasMatchingEntry', async () => {
+    await logManager.initialize();
+    await logManager.appendEntries(validEntries);
+    await logManager.discardEntriesUpTo(3, 1);
+    expect(await logManager.hasMatchingEntry(1, 1)).toBe(false);
+  });
+
+  it('should return true when prevLogIndex equals snapshotIndex and term matches for matchesPrevLog', async () => {
+    await logManager.initialize();
+    await logManager.appendEntries(validEntries);
+    await logManager.discardEntriesUpTo(2, 1);
+    expect(await logManager.matchesPrevLog(2, 1)).toBe(true);
+  });
+
+  it('should return false when prevLogIndex equals snapshotIndex but term differs for matchesPrevLog', async () => {
+    await logManager.initialize();
+    await logManager.appendEntries(validEntries);
+    await logManager.discardEntriesUpTo(2, 1);
+    expect(await logManager.matchesPrevLog(2, 99)).toBe(false);
+  });
+
+  it('should return null when lastIndex equals snapshotIndex for getLastEntry', async () => {
+    await logManager.initialize();
+    await logManager.appendEntries(validEntries);
+    await logManager.discardEntriesUpTo(4, 2);
+    expect(await logManager.getLastEntry()).toBeNull();
+  });
+
+  it('should return snapshotIndex + 1 for getFirstIndex when snapshot exists', async () => {
+    await logManager.initialize();
+    await logManager.appendEntries(validEntries);
+    await logManager.discardEntriesUpTo(2, 1);
+    expect(logManager.getFirstIndex()).toBe(3);
+  });
+
+  it('should emit LogConflictResolved event when nodeId is set and conflict is detected', async () => {
+    const emit = vi.fn();
+    const eventBus: RaftEventBus = { emit, subscribe: () => () => {} };
+    const logManagerWithNodeId = new LogManager(logStorage, eventBus, 'node1');
+    await logManagerWithNodeId.initialize();
+    await logManagerWithNodeId.appendEntries(validEntries);
+
+    const conflictingEntry3: LogEntry = { index: 3, term: 99, type: LogEntryType.COMMAND, command: validCommand3 };
+    await logManagerWithNodeId.appendEntriesFrom(2, [conflictingEntry3]);
+
+    expect(emit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'LogConflictResolved',
+        nodeId: 'node1',
+        truncatedFromIndex: 3,
+      }),
+    );
+  });
+
+  it('should throw when not initialized for appendConfigEntry', async () => {
+    await expect(
+      logManager.appendConfigEntry(
+        {
+          voters: [
+            { id: 'node1', address: 'address1' },
+            { id: 'node2', address: 'address2' },
+          ],
+          learners: [],
+        },
+        1,
+      ),
+    ).rejects.toThrow('LogManager is not initialized');
+  });
+
+  it('should append a config entry and return the new index', async () => {
+    await logManager.initialize();
+    const config = {
+      voters: [
+        { id: 'node1', address: 'address1' },
+        { id: 'node2', address: 'address2' },
+      ],
+      learners: [],
+    };
+    const newIndex = await logManager.appendConfigEntry(config, 1);
+    expect(newIndex).toBe(1);
+    const entry = await logManager.getEntry(1);
+    expect(entry).toEqual({ index: 1, term: 1, type: LogEntryType.CONFIG, config });
+  });
+
+  it('should throw when not initialized for getLastConfigEntry', async () => {
+    await expect(logManager.getLastConfigEntry()).rejects.toThrow('LogManager is not initialized');
+  });
+
+  it('should return null for getLastConfigEntry when no config entry exists', async () => {
+    await logManager.initialize();
+    await logManager.appendEntries(validEntries);
+    const lastConfigEntry = await logManager.getLastConfigEntry();
+    expect(lastConfigEntry).toBeNull();
+  });
+
+  it('should return the last config entry for getLastConfigEntry', async () => {
+    await logManager.initialize();
+    const config = {
+      voters: [
+        { id: 'node1', address: 'address1' },
+        { id: 'node2', address: 'address2' },
+      ],
+      learners: [],
+    };
+    await logManager.appendCommand(validCommand, 1);
+    await logManager.appendConfigEntry(config, 1);
+    await logManager.appendCommand(validCommand2, 1);
+    const result = await logManager.getLastConfigEntry();
+    expect(result).toEqual(config);
+  });
+
+  it('should throw when not initialized for appendNoOpEntry', async () => {
+    await expect(logManager.appendNoOpEntry(1)).rejects.toThrow('LogManager is not initialized');
+  });
+
+  it('should append a NOOP entry and return the new index', async () => {
+    await logManager.initialize();
+    const newIndex = await logManager.appendNoOpEntry(5);
+    expect(newIndex).toBe(1);
+
+    const entry = await logManager.getEntry(1);
+    expect(entry).toEqual({ index: 1, term: 5, type: LogEntryType.NOOP });
+  });
+
+  it('should emit logAppended event when nodeId is set and entry is appended', async () => {
+    const emit = vi.fn();
+    const eventBus: RaftEventBus = { emit, subscribe: () => () => {} };
+    const logManagerWithNodeId = new LogManager(logStorage, eventBus, 'node1');
+    await logManagerWithNodeId.initialize();
+    await logManagerWithNodeId.appendEntry(validLogEntry);
+    expect(emit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'LogAppended',
+        nodeId: 'node1',
+        entries: [validLogEntry],
+        term: 1,
+      }),
+    );
+  });
+});

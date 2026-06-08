@@ -1,0 +1,8 @@
+{
+  "name": "simpledbms-query-language",
+  "version": "1.0.0",
+  "description": "SQL-like query language engine with lexer, parser, AST and executor for SimpleDBMS",
+  "license": "ISC",
+  "type": "module",
+  "main": "./index.mts"
+}

@@ -1,0 +1,7 @@
+{
+  "name": "simpledbms-auth",
+  "version": "1.0.0",
+  "description": "Authentication, password hashing and encryption for SimpleDBMS",
+  "license": "ISC",
+  "type": "module"
+}

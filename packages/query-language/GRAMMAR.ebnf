@@ -1,0 +1,165 @@
+(*
+  Querylib Query Language Grammar (Current Behavior)
+  -------------------------------------------------
+  Scope: This grammar documents what the parser currently accepts.
+  Non-goals: It does not describe future or partially implemented execution semantics.
+
+  Notes:
+  - Keywords are matched case-insensitively by the lexer (identifiers are uppercased in AST).
+  - Numbers are integer tokens only.
+  - Strings are single-quoted.
+  - No trailing semicolon is expected.
+*)
+
+query = selectStatement | deleteStatement | insertStatement | updateStatement ;
+
+selectStatement =
+  "SELECT",
+  [ "DISTINCT" ],
+  selectColumns,
+  selectFrom,
+  [ whereClause ],
+  [ groupByClause ],
+  [ havingClause ],
+  [ orderByClause ],
+  [ limitOffsetClause ] ;
+
+deleteStatement = "DELETE", "FROM", tableList, [ whereClause ] ;
+
+insertStatement =
+  "INSERT",
+  "INTO",
+  identifier,
+  "(", identifier, { ",", identifier }, ")",
+  "VALUES",
+  valuesTuple,
+  { ",", valuesTuple } ;
+
+updateStatement =
+  "UPDATE",
+  identifier,
+  "SET",
+  setAssignment,
+  { ",", setAssignment },
+  [ whereClause ] ;
+
+setAssignment = identifier, "=", valueNode ;
+
+valuesTuple = "(", valueNode, { ",", valueNode }, ")" ;
+
+selectColumns = "*" | selectColumn, { ",", selectColumn } ;
+
+selectColumn = identifier | aggregateCall ;
+
+aggregateCall =
+  ( "COUNT", "(", ( "*" | identifier ), ")" )
+  | ( ( "SUM" | "AVG" | "MIN" | "MAX" ), "(", identifier, ")" ) ;
+
+selectFrom = "FROM", sourceList, { joinSource } ;
+
+sourceList = tableSource, { ",", tableSource } ;
+
+tableList = tableSource, { ",", tableSource } ;
+
+tableSource = identifier ;
+
+joinSource = crossJoin | qualifiedJoin ;
+
+crossJoin = "CROSS", "JOIN", tableSource ;
+
+qualifiedJoin =
+  [ "INNER" | "LEFT" | "RIGHT" | "OUTER" ],
+  [ "OUTER" ],
+  "JOIN",
+  tableSource,
+  "ON",
+  identifier,
+  comparisonOperator,
+  valueNode ;
+
+whereClause = "WHERE", expression ;
+
+groupByClause = "GROUP", "BY", identifier, { ",", identifier } ;
+
+havingClause = "HAVING", expressionWithAggregate ;
+
+orderByClause = "ORDER", "BY", orderByItem, { ",", orderByItem } ;
+
+orderByItem = identifier, [ "ASC" | "DESC" ] ;
+
+limitOffsetClause = "LIMIT", number, [ "OFFSET", number ] ;
+
+expression = orExpression ;
+expressionWithAggregate = orExpressionWithAggregate ;
+
+orExpression = andExpression, { "OR", andExpression } ;
+andExpression = unaryExpression, { "AND", unaryExpression } ;
+unaryExpression = [ "NOT" ], primaryBooleanExpression ;
+
+primaryBooleanExpression =
+  "(", expression, ")"
+  | comparisonExpression ;
+
+comparisonExpression =
+  additiveExpression,
+  (
+    comparisonOperator, additiveExpression
+    | "IN", "(", valueNode, { ",", valueNode }, ")"
+    | "IS", [ "NOT" ], "NULL"
+  ) ;
+
+orExpressionWithAggregate = andExpressionWithAggregate, { "OR", andExpressionWithAggregate } ;
+andExpressionWithAggregate = unaryExpressionWithAggregate, { "AND", unaryExpressionWithAggregate } ;
+unaryExpressionWithAggregate = [ "NOT" ], primaryBooleanExpressionWithAggregate ;
+
+primaryBooleanExpressionWithAggregate =
+  "(", expressionWithAggregate, ")"
+  | comparisonExpressionWithAggregate ;
+
+comparisonExpressionWithAggregate =
+  additiveExpressionWithAggregate,
+  (
+    comparisonOperator, additiveExpressionWithAggregate
+    | "IN", "(", valueNode, { ",", valueNode }, ")"
+    | "IS", [ "NOT" ], "NULL"
+  ) ;
+
+additiveExpression = multiplicativeExpression, { ( "+" | "-" ), multiplicativeExpression } ;
+multiplicativeExpression = valuePrimaryExpression, { ( "*" | "/" ), valuePrimaryExpression } ;
+
+additiveExpressionWithAggregate =
+  multiplicativeExpressionWithAggregate,
+  { ( "+" | "-" ), multiplicativeExpressionWithAggregate } ;
+
+multiplicativeExpressionWithAggregate =
+  valuePrimaryExpressionWithAggregate,
+  { ( "*" | "/" ), valuePrimaryExpressionWithAggregate } ;
+
+valuePrimaryExpression = "(", additiveExpression, ")" | valueNode ;
+
+valuePrimaryExpressionWithAggregate =
+  "(", additiveExpressionWithAggregate, ")"
+  | aggregateCall
+  | valueNode ;
+
+valueNode = literal | identifier ;
+
+literal = number | string | "NULL" ;
+
+comparisonOperator = "=" | "!=" | ">" | ">=" | "<" | "<=" ;
+
+identifier = identStart, { identChar | "." } ;
+identStart = letter | "_" ;
+identChar = letter | digit | "_" ;
+
+number = digit, { digit } ;
+string = "'", { stringChar }, "'" ;
+
+letter = "A" | "B" | "C" | "D" | "E" | "F" | "G" | "H" | "I" | "J" | "K" | "L" | "M"
+       | "N" | "O" | "P" | "Q" | "R" | "S" | "T" | "U" | "V" | "W" | "X" | "Y" | "Z"
+       | "a" | "b" | "c" | "d" | "e" | "f" | "g" | "h" | "i" | "j" | "k" | "l" | "m"
+       | "n" | "o" | "p" | "q" | "r" | "s" | "t" | "u" | "v" | "w" | "x" | "y" | "z" ;
+
+digit = "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" ;
+
+stringChar = ? any character except single quote ? ;

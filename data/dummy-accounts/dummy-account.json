@@ -1,0 +1,1253 @@
+{
+  "username": "demo",
+  "password": "demo12345",
+  "collections": [
+    {
+      "name": "customers",
+      "documents": [
+        {
+          "name": "customer_001",
+          "content": {
+            "firstName": "John",
+            "lastName": "Doe",
+            "email": "john.doe@example.com",
+            "phone": "+1-555-0123",
+            "address": {
+              "street": "123 Main St",
+              "city": "San Francisco",
+              "state": "CA",
+              "zipCode": "94102"
+            },
+            "accountStatus": "active",
+            "joinDate": "2023-01-15",
+            "totalOrders": 42,
+            "loyaltyPoints": 1250
+          }
+        },
+        {
+          "name": "customer_002",
+          "content": {
+            "firstName": "Jane",
+            "lastName": "Smith",
+            "email": "jane.smith@example.com",
+            "phone": "+1-555-0456",
+            "address": {
+              "street": "456 Oak Ave",
+              "city": "Los Angeles",
+              "state": "CA",
+              "zipCode": "90001"
+            },
+            "accountStatus": "active",
+            "joinDate": "2023-03-22",
+            "totalOrders": 28,
+            "loyaltyPoints": 890
+          }
+        },
+        {
+          "name": "customer_003",
+          "content": {
+            "firstName": "Michael",
+            "lastName": "Johnson",
+            "email": "m.johnson@example.com",
+            "phone": "+1-555-0789",
+            "address": {
+              "street": "789 Pine Rd",
+              "city": "Seattle",
+              "state": "WA",
+              "zipCode": "98101"
+            },
+            "accountStatus": "premium",
+            "joinDate": "2022-11-10",
+            "totalOrders": 156,
+            "loyaltyPoints": 4200
+          }
+        },
+        {
+          "name": "customer_004",
+          "content": {
+            "firstName": "Emily",
+            "lastName": "Davis",
+            "email": "emily.d@example.com",
+            "phone": "+1-555-1234",
+            "address": {
+              "street": "321 Elm St",
+              "city": "Austin",
+              "state": "TX",
+              "zipCode": "78701"
+            },
+            "accountStatus": "active",
+            "joinDate": "2023-05-18",
+            "totalOrders": 67,
+            "loyaltyPoints": 1890
+          }
+        },
+        {
+          "name": "customer_005",
+          "content": {
+            "firstName": "David",
+            "lastName": "Brown",
+            "email": "david.brown@example.com",
+            "phone": "+1-555-2345",
+            "address": {
+              "street": "654 Maple Dr",
+              "city": "Portland",
+              "state": "OR",
+              "zipCode": "97201"
+            },
+            "accountStatus": "active",
+            "joinDate": "2023-07-03",
+            "totalOrders": 19,
+            "loyaltyPoints": 420
+          }
+        },
+        {
+          "name": "customer_006",
+          "content": {
+            "firstName": "Sarah",
+            "lastName": "Wilson",
+            "email": "s.wilson@example.com",
+            "phone": "+1-555-3456",
+            "address": {
+              "street": "987 Cedar Ln",
+              "city": "Denver",
+              "state": "CO",
+              "zipCode": "80201"
+            },
+            "accountStatus": "premium",
+            "joinDate": "2022-08-25",
+            "totalOrders": 203,
+            "loyaltyPoints": 6780
+          }
+        },
+        {
+          "name": "customer_007",
+          "content": {
+            "firstName": "Robert",
+            "lastName": "Martinez",
+            "email": "r.martinez@example.com",
+            "phone": "+1-555-4567",
+            "address": {
+              "street": "147 Birch Ave",
+              "city": "Phoenix",
+              "state": "AZ",
+              "zipCode": "85001"
+            },
+            "accountStatus": "active",
+            "joinDate": "2023-09-12",
+            "totalOrders": 34,
+            "loyaltyPoints": 980
+          }
+        },
+        {
+          "name": "customer_008",
+          "content": {
+            "firstName": "Lisa",
+            "lastName": "Anderson",
+            "email": "lisa.a@example.com",
+            "phone": "+1-555-5678",
+            "address": {
+              "street": "258 Spruce St",
+              "city": "Boston",
+              "state": "MA",
+              "zipCode": "02101"
+            },
+            "accountStatus": "inactive",
+            "joinDate": "2021-12-05",
+            "totalOrders": 8,
+            "loyaltyPoints": 120
+          }
+        },
+        {
+          "name": "customer_009",
+          "content": {
+            "firstName": "James",
+            "lastName": "Taylor",
+            "email": "james.taylor@example.com",
+            "phone": "+1-555-6789",
+            "address": {
+              "street": "369 Willow Way",
+              "city": "Miami",
+              "state": "FL",
+              "zipCode": "33101"
+            },
+            "accountStatus": "active",
+            "joinDate": "2023-04-20",
+            "totalOrders": 52,
+            "loyaltyPoints": 1560
+          }
+        },
+        {
+          "name": "customer_010",
+          "content": {
+            "firstName": "Patricia",
+            "lastName": "Thomas",
+            "email": "patricia.t@example.com",
+            "phone": "+1-555-7890",
+            "address": {
+              "street": "741 Poplar Ct",
+              "city": "Chicago",
+              "state": "IL",
+              "zipCode": "60601"
+            },
+            "accountStatus": "premium",
+            "joinDate": "2022-06-14",
+            "totalOrders": 189,
+            "loyaltyPoints": 5340
+          }
+        },
+        {
+          "name": "customer_011",
+          "content": {
+            "firstName": "Christopher",
+            "lastName": "Moore",
+            "email": "chris.moore@example.com",
+            "phone": "+1-555-8901",
+            "address": {
+              "street": "852 Aspen Rd",
+              "city": "Atlanta",
+              "state": "GA",
+              "zipCode": "30301"
+            },
+            "accountStatus": "active",
+            "joinDate": "2023-02-28",
+            "totalOrders": 41,
+            "loyaltyPoints": 1180
+          }
+        },
+        {
+          "name": "customer_012",
+          "content": {
+            "firstName": "Amanda",
+            "lastName": "Jackson",
+            "email": "amanda.j@example.com",
+            "phone": "+1-555-9012",
+            "address": {
+              "street": "963 Hickory Blvd",
+              "city": "Nashville",
+              "state": "TN",
+              "zipCode": "37201"
+            },
+            "accountStatus": "active",
+            "joinDate": "2023-08-07",
+            "totalOrders": 23,
+            "loyaltyPoints": 670
+          }
+        },
+        {
+          "name": "customer_013",
+          "content": {
+            "firstName": "Daniel",
+            "lastName": "White",
+            "email": "daniel.white@example.com",
+            "phone": "+1-555-0134",
+            "address": {
+              "street": "159 Magnolia St",
+              "city": "Charlotte",
+              "state": "NC",
+              "zipCode": "28201"
+            },
+            "accountStatus": "premium",
+            "joinDate": "2022-10-19",
+            "totalOrders": 134,
+            "loyaltyPoints": 3890
+          }
+        },
+        {
+          "name": "customer_014",
+          "content": {
+            "firstName": "Michelle",
+            "lastName": "Harris",
+            "email": "michelle.h@example.com",
+            "phone": "+1-555-1245",
+            "address": {
+              "street": "357 Cypress Ln",
+              "city": "Las Vegas",
+              "state": "NV",
+              "zipCode": "89101"
+            },
+            "accountStatus": "active",
+            "joinDate": "2023-06-23",
+            "totalOrders": 38,
+            "loyaltyPoints": 1120
+          }
+        },
+        {
+          "name": "customer_015",
+          "content": {
+            "firstName": "Kevin",
+            "lastName": "Clark",
+            "email": "kevin.clark@example.com",
+            "phone": "+1-555-2356",
+            "address": {
+              "street": "468 Redwood Ave",
+              "city": "San Diego",
+              "state": "CA",
+              "zipCode": "92101"
+            },
+            "accountStatus": "active",
+            "joinDate": "2023-01-09",
+            "totalOrders": 56,
+            "loyaltyPoints": 1640
+          }
+        }
+      ]
+    },
+    {
+      "name": "products",
+      "documents": [
+        {
+          "name": "product_laptop_001",
+          "content": {
+            "productName": "UltraBook Pro 15",
+            "category": "Electronics",
+            "subcategory": "Laptops",
+            "price": 1299.99,
+            "currency": "USD",
+            "stock": 45,
+            "specifications": {
+              "processor": "Intel i7-12700H",
+              "ram": "16GB DDR4",
+              "storage": "512GB SSD",
+              "display": "15.6 inch FHD",
+              "graphics": "Integrated Intel Iris Xe"
+            },
+            "rating": 4.5,
+            "reviews": 234,
+            "inStock": true
+          }
+        },
+        {
+          "name": "product_phone_001",
+          "content": {
+            "productName": "SmartPhone X12",
+            "category": "Electronics",
+            "subcategory": "Mobile Phones",
+            "price": 899.99,
+            "currency": "USD",
+            "stock": 120,
+            "specifications": {
+              "processor": "Snapdragon 8 Gen 2",
+              "ram": "12GB",
+              "storage": "256GB",
+              "display": "6.7 inch AMOLED",
+              "camera": "108MP Triple Camera",
+              "battery": "5000mAh"
+            },
+            "rating": 4.7,
+            "reviews": 892,
+            "inStock": true
+          }
+        },
+        {
+          "name": "product_headphones_001",
+          "content": {
+            "productName": "Noise Cancelling Pro Headphones",
+            "category": "Electronics",
+            "subcategory": "Audio",
+            "price": 349.99,
+            "currency": "USD",
+            "stock": 78,
+            "specifications": {
+              "type": "Over-ear",
+              "wireless": true,
+              "noiseCancellation": "Active ANC",
+              "batteryLife": "30 hours",
+              "connectivity": "Bluetooth 5.2"
+            },
+            "rating": 4.8,
+            "reviews": 567,
+            "inStock": true
+          }
+        },
+        {
+          "name": "product_watch_001",
+          "content": {
+            "productName": "Fitness SmartWatch",
+            "category": "Electronics",
+            "subcategory": "Wearables",
+            "price": 299.99,
+            "currency": "USD",
+            "stock": 92,
+            "specifications": {
+              "display": "1.4 inch AMOLED",
+              "waterResistance": "5ATM",
+              "sensors": ["Heart Rate", "GPS", "SpO2", "Sleep Tracking"],
+              "batteryLife": "7 days",
+              "connectivity": "Bluetooth, WiFi"
+            },
+            "rating": 4.6,
+            "reviews": 421,
+            "inStock": true
+          }
+        },
+        {
+          "name": "product_tablet_001",
+          "content": {
+            "productName": "ProTab 11 Ultra",
+            "category": "Electronics",
+            "subcategory": "Tablets",
+            "price": 649.99,
+            "currency": "USD",
+            "stock": 67,
+            "specifications": {
+              "processor": "M2 Chip",
+              "ram": "8GB",
+              "storage": "256GB",
+              "display": "11 inch Liquid Retina",
+              "camera": "12MP Wide + 10MP Ultra Wide"
+            },
+            "rating": 4.8,
+            "reviews": 534,
+            "inStock": true
+          }
+        },
+        {
+          "name": "product_keyboard_001",
+          "content": {
+            "productName": "Mechanical RGB Keyboard Pro",
+            "category": "Electronics",
+            "subcategory": "Accessories",
+            "price": 159.99,
+            "currency": "USD",
+            "stock": 143,
+            "specifications": {
+              "switches": "Cherry MX Blue",
+              "layout": "Full-size (104 keys)",
+              "backlight": "RGB Per-key",
+              "connectivity": "Wired USB-C"
+            },
+            "rating": 4.7,
+            "reviews": 678,
+            "inStock": true
+          }
+        },
+        {
+          "name": "product_mouse_001",
+          "content": {
+            "productName": "Wireless Gaming Mouse X",
+            "category": "Electronics",
+            "subcategory": "Accessories",
+            "price": 79.99,
+            "currency": "USD",
+            "stock": 198,
+            "specifications": {
+              "dpi": "25600",
+              "buttons": "8 Programmable",
+              "battery": "70 hours",
+              "connectivity": "Wireless 2.4GHz + Bluetooth"
+            },
+            "rating": 4.6,
+            "reviews": 892,
+            "inStock": true
+          }
+        },
+        {
+          "name": "product_monitor_001",
+          "content": {
+            "productName": "4K UltraWide Monitor 34\"",
+            "category": "Electronics",
+            "subcategory": "Monitors",
+            "price": 799.99,
+            "currency": "USD",
+            "stock": 34,
+            "specifications": {
+              "resolution": "3440x1440",
+              "refreshRate": "144Hz",
+              "panelType": "IPS",
+              "responseTime": "1ms",
+              "ports": ["HDMI 2.1", "DisplayPort 1.4", "USB-C"]
+            },
+            "rating": 4.9,
+            "reviews": 412,
+            "inStock": true
+          }
+        },
+        {
+          "name": "product_webcam_001",
+          "content": {
+            "productName": "HD Pro Webcam 1080p",
+            "category": "Electronics",
+            "subcategory": "Accessories",
+            "price": 129.99,
+            "currency": "USD",
+            "stock": 156,
+            "specifications": {
+              "resolution": "1920x1080",
+              "framerate": "60fps",
+              "autofocus": true,
+              "microphone": "Dual stereo",
+              "fieldOfView": "90 degrees"
+            },
+            "rating": 4.5,
+            "reviews": 345,
+            "inStock": true
+          }
+        },
+        {
+          "name": "product_speaker_001",
+          "content": {
+            "productName": "Bluetooth Smart Speaker",
+            "category": "Electronics",
+            "subcategory": "Audio",
+            "price": 199.99,
+            "currency": "USD",
+            "stock": 89,
+            "specifications": {
+              "output": "40W",
+              "connectivity": "WiFi, Bluetooth 5.0",
+              "voiceAssistant": "Alexa, Google Assistant",
+              "battery": "12 hours",
+              "waterproof": "IPX7"
+            },
+            "rating": 4.7,
+            "reviews": 567,
+            "inStock": true
+          }
+        },
+        {
+          "name": "product_charger_001",
+          "content": {
+            "productName": "100W GaN Fast Charger",
+            "category": "Electronics",
+            "subcategory": "Accessories",
+            "price": 69.99,
+            "currency": "USD",
+            "stock": 234,
+            "specifications": {
+              "power": "100W",
+              "ports": "2x USB-C, 1x USB-A",
+              "technology": "GaN (Gallium Nitride)",
+              "foldable": true,
+              "compatibility": "Universal"
+            },
+            "rating": 4.8,
+            "reviews": 789,
+            "inStock": true
+          }
+        },
+        {
+          "name": "product_ssd_001",
+          "content": {
+            "productName": "NVMe SSD 1TB",
+            "category": "Electronics",
+            "subcategory": "Storage",
+            "price": 149.99,
+            "currency": "USD",
+            "stock": 167,
+            "specifications": {
+              "capacity": "1TB",
+              "interface": "PCIe Gen 4.0 x4",
+              "readSpeed": "7000 MB/s",
+              "writeSpeed": "5000 MB/s",
+              "formFactor": "M.2 2280"
+            },
+            "rating": 4.9,
+            "reviews": 923,
+            "inStock": true
+          }
+        },
+        {
+          "name": "product_router_001",
+          "content": {
+            "productName": "WiFi 6E Mesh Router",
+            "category": "Electronics",
+            "subcategory": "Networking",
+            "price": 399.99,
+            "currency": "USD",
+            "stock": 45,
+            "specifications": {
+              "standard": "WiFi 6E (802.11ax)",
+              "coverage": "6000 sq ft",
+              "speed": "6 Gbps",
+              "nodes": "3-pack",
+              "ports": "4x Gigabit Ethernet per node"
+            },
+            "rating": 4.7,
+            "reviews": 289,
+            "inStock": true
+          }
+        },
+        {
+          "name": "product_earbuds_001",
+          "content": {
+            "productName": "Wireless Earbuds Pro",
+            "category": "Electronics",
+            "subcategory": "Audio",
+            "price": 249.99,
+            "currency": "USD",
+            "stock": 178,
+            "specifications": {
+              "noiseCancellation": "Active ANC",
+              "battery": "6 hours + 24 hours case",
+              "waterResistance": "IPX4",
+              "codec": "AAC, LDAC",
+              "connectivity": "Bluetooth 5.3"
+            },
+            "rating": 4.8,
+            "reviews": 1234,
+            "inStock": true
+          }
+        },
+        {
+          "name": "product_camera_001",
+          "content": {
+            "productName": "Mirrorless Camera Kit",
+            "category": "Electronics",
+            "subcategory": "Cameras",
+            "price": 1899.99,
+            "currency": "USD",
+            "stock": 23,
+            "specifications": {
+              "sensor": "24.2MP Full-Frame",
+              "videoResolution": "4K 60fps",
+              "autofocus": "693-point AF",
+              "iso": "100-51200",
+              "includes": "Body + 28-70mm lens"
+            },
+            "rating": 4.9,
+            "reviews": 456,
+            "inStock": true
+          }
+        },
+        {
+          "name": "product_drone_001",
+          "content": {
+            "productName": "FlyPro 4K Drone",
+            "category": "Electronics",
+            "subcategory": "Drones",
+            "price": 799.99,
+            "currency": "USD",
+            "stock": 34,
+            "specifications": {
+              "camera": "4K 60fps",
+              "flightTime": "31 minutes",
+              "range": "10 km",
+              "gimbal": "3-axis",
+              "features": ["Obstacle avoidance", "GPS", "Follow-me mode"]
+            },
+            "rating": 4.6,
+            "reviews": 234,
+            "inStock": true
+          }
+        },
+        {
+          "name": "product_powerbank_001",
+          "content": {
+            "productName": "Ultra Capacity Power Bank 30000mAh",
+            "category": "Electronics",
+            "subcategory": "Accessories",
+            "price": 89.99,
+            "currency": "USD",
+            "stock": 267,
+            "specifications": {
+              "capacity": "30000mAh",
+              "input": "USB-C PD 65W",
+              "output": "USB-C 65W, USB-A 22.5W",
+              "display": "LED percentage display",
+              "charging": "Supports laptop charging"
+            },
+            "rating": 4.7,
+            "reviews": 678,
+            "inStock": true
+          }
+        },
+        {
+          "name": "product_printer_001",
+          "content": {
+            "productName": "All-in-One Laser Printer",
+            "category": "Electronics",
+            "subcategory": "Office",
+            "price": 449.99,
+            "currency": "USD",
+            "stock": 56,
+            "specifications": {
+              "type": "Color Laser",
+              "functions": ["Print", "Scan", "Copy", "Fax"],
+              "speed": "30 ppm",
+              "connectivity": "WiFi, Ethernet, USB",
+              "duplex": "Automatic"
+            },
+            "rating": 4.5,
+            "reviews": 345,
+            "inStock": true
+          }
+        },
+        {
+          "name": "product_projector_001",
+          "content": {
+            "productName": "Smart 4K Projector",
+            "category": "Electronics",
+            "subcategory": "Home Theater",
+            "price": 1299.99,
+            "currency": "USD",
+            "stock": 28,
+            "specifications": {
+              "resolution": "4K UHD",
+              "brightness": "3000 lumens",
+              "contrast": "10000:1",
+              "throwDistance": "3-30 feet",
+              "smart": "Android TV built-in"
+            },
+            "rating": 4.8,
+            "reviews": 289,
+            "inStock": true
+          }
+        }
+      ]
+    },
+    {
+      "name": "orders",
+      "documents": [
+        {
+          "name": "order_2024_001",
+          "content": {
+            "orderNumber": "ORD-2024-001",
+            "customerId": "customer_001",
+            "customerName": "John Doe",
+            "orderDate": "2024-12-01T10:30:00Z",
+            "status": "delivered",
+            "items": [
+              {
+                "productId": "product_laptop_001",
+                "productName": "UltraBook Pro 15",
+                "quantity": 1,
+                "unitPrice": 1299.99,
+                "subtotal": 1299.99
+              }
+            ],
+            "shipping": {
+              "method": "Express",
+              "cost": 15.99,
+              "address": "123 Main St, San Francisco, CA 94102",
+              "trackingNumber": "TRK1234567890"
+            },
+            "payment": {
+              "method": "Credit Card",
+              "last4": "4242",
+              "transactionId": "TXN-ABC-123"
+            },
+            "subtotal": 1299.99,
+            "tax": 104.0,
+            "total": 1419.98
+          }
+        },
+        {
+          "name": "order_2024_002",
+          "content": {
+            "orderNumber": "ORD-2024-002",
+            "customerId": "customer_002",
+            "customerName": "Jane Smith",
+            "orderDate": "2024-12-03T14:15:00Z",
+            "status": "shipped",
+            "items": [
+              {
+                "productId": "product_phone_001",
+                "productName": "SmartPhone X12",
+                "quantity": 1,
+                "unitPrice": 899.99,
+                "subtotal": 899.99
+              },
+              {
+                "productId": "product_headphones_001",
+                "productName": "Noise Cancelling Pro Headphones",
+                "quantity": 1,
+                "unitPrice": 349.99,
+                "subtotal": 349.99
+              }
+            ],
+            "shipping": {
+              "method": "Standard",
+              "cost": 9.99,
+              "address": "456 Oak Ave, Los Angeles, CA 90001",
+              "trackingNumber": "TRK9876543210"
+            },
+            "payment": {
+              "method": "PayPal",
+              "email": "jane.smith@example.com",
+              "transactionId": "TXN-XYZ-456"
+            },
+            "subtotal": 1249.98,
+            "tax": 100.0,
+            "total": 1359.97
+          }
+        },
+        {
+          "name": "order_2024_003",
+          "content": {
+            "orderNumber": "ORD-2024-003",
+            "customerId": "customer_003",
+            "customerName": "Michael Johnson",
+            "orderDate": "2024-12-10T09:45:00Z",
+            "status": "processing",
+            "items": [
+              {
+                "productId": "product_watch_001",
+                "productName": "Fitness SmartWatch",
+                "quantity": 2,
+                "unitPrice": 299.99,
+                "subtotal": 599.98
+              }
+            ],
+            "shipping": {
+              "method": "Express",
+              "cost": 15.99,
+              "address": "789 Pine Rd, Seattle, WA 98101"
+            },
+            "payment": {
+              "method": "Credit Card",
+              "last4": "8888",
+              "transactionId": "TXN-LMN-789"
+            },
+            "subtotal": 599.98,
+            "tax": 48.0,
+            "total": 663.97
+          }
+        },
+        {
+          "name": "order_2024_004",
+          "content": {
+            "orderNumber": "ORD-2024-004",
+            "customerId": "customer_004",
+            "customerName": "Emily Davis",
+            "orderDate": "2024-11-28T16:20:00Z",
+            "status": "delivered",
+            "items": [
+              {
+                "productId": "product_tablet_001",
+                "productName": "ProTab 11 Ultra",
+                "quantity": 1,
+                "unitPrice": 649.99,
+                "subtotal": 649.99
+              },
+              {
+                "productId": "product_keyboard_001",
+                "productName": "Mechanical RGB Keyboard Pro",
+                "quantity": 1,
+                "unitPrice": 159.99,
+                "subtotal": 159.99
+              }
+            ],
+            "shipping": {
+              "method": "Standard",
+              "cost": 9.99,
+              "address": "321 Elm St, Austin, TX 78701",
+              "trackingNumber": "TRK5554443333"
+            },
+            "payment": {
+              "method": "Credit Card",
+              "last4": "1234",
+              "transactionId": "TXN-AAA-111"
+            },
+            "subtotal": 809.98,
+            "tax": 64.8,
+            "total": 884.77
+          }
+        },
+        {
+          "name": "order_2024_005",
+          "content": {
+            "orderNumber": "ORD-2024-005",
+            "customerId": "customer_005",
+            "customerName": "David Brown",
+            "orderDate": "2024-12-05T11:30:00Z",
+            "status": "shipped",
+            "items": [
+              {
+                "productId": "product_monitor_001",
+                "productName": "4K UltraWide Monitor 34\"",
+                "quantity": 1,
+                "unitPrice": 799.99,
+                "subtotal": 799.99
+              }
+            ],
+            "shipping": {
+              "method": "Express",
+              "cost": 15.99,
+              "address": "654 Maple Dr, Portland, OR 97201",
+              "trackingNumber": "TRK7778889999"
+            },
+            "payment": {
+              "method": "PayPal",
+              "email": "david.brown@example.com",
+              "transactionId": "TXN-BBB-222"
+            },
+            "subtotal": 799.99,
+            "tax": 64.0,
+            "total": 879.98
+          }
+        },
+        {
+          "name": "order_2024_006",
+          "content": {
+            "orderNumber": "ORD-2024-006",
+            "customerId": "customer_006",
+            "customerName": "Sarah Wilson",
+            "orderDate": "2024-11-22T13:15:00Z",
+            "status": "delivered",
+            "items": [
+              {
+                "productId": "product_camera_001",
+                "productName": "Mirrorless Camera Kit",
+                "quantity": 1,
+                "unitPrice": 1899.99,
+                "subtotal": 1899.99
+              },
+              {
+                "productId": "product_ssd_001",
+                "productName": "NVMe SSD 1TB",
+                "quantity": 2,
+                "unitPrice": 149.99,
+                "subtotal": 299.98
+              }
+            ],
+            "shipping": {
+              "method": "Express",
+              "cost": 19.99,
+              "address": "987 Cedar Ln, Denver, CO 80201",
+              "trackingNumber": "TRK1112223334"
+            },
+            "payment": {
+              "method": "Credit Card",
+              "last4": "5678",
+              "transactionId": "TXN-CCC-333"
+            },
+            "subtotal": 2199.97,
+            "tax": 176.0,
+            "total": 2395.96
+          }
+        },
+        {
+          "name": "order_2024_007",
+          "content": {
+            "orderNumber": "ORD-2024-007",
+            "customerId": "customer_007",
+            "customerName": "Robert Martinez",
+            "orderDate": "2024-12-08T08:45:00Z",
+            "status": "processing",
+            "items": [
+              {
+                "productId": "product_earbuds_001",
+                "productName": "Wireless Earbuds Pro",
+                "quantity": 1,
+                "unitPrice": 249.99,
+                "subtotal": 249.99
+              },
+              {
+                "productId": "product_charger_001",
+                "productName": "100W GaN Fast Charger",
+                "quantity": 1,
+                "unitPrice": 69.99,
+                "subtotal": 69.99
+              }
+            ],
+            "shipping": {
+              "method": "Standard",
+              "cost": 7.99,
+              "address": "147 Birch Ave, Phoenix, AZ 85001"
+            },
+            "payment": {
+              "method": "Credit Card",
+              "last4": "9012",
+              "transactionId": "TXN-DDD-444"
+            },
+            "subtotal": 319.98,
+            "tax": 25.6,
+            "total": 353.57
+          }
+        },
+        {
+          "name": "order_2024_008",
+          "content": {
+            "orderNumber": "ORD-2024-008",
+            "customerId": "customer_008",
+            "customerName": "Lisa Anderson",
+            "orderDate": "2024-11-15T19:30:00Z",
+            "status": "cancelled",
+            "items": [
+              {
+                "productId": "product_router_001",
+                "productName": "WiFi 6E Mesh Router",
+                "quantity": 1,
+                "unitPrice": 399.99,
+                "subtotal": 399.99
+              }
+            ],
+            "shipping": {
+              "method": "Standard",
+              "cost": 0.0,
+              "address": "258 Spruce St, Boston, MA 02101"
+            },
+            "payment": {
+              "method": "Credit Card",
+              "last4": "3456",
+              "transactionId": "TXN-EEE-555"
+            },
+            "subtotal": 399.99,
+            "tax": 32.0,
+            "total": 431.99,
+            "cancellationReason": "Customer requested cancellation"
+          }
+        },
+        {
+          "name": "order_2024_009",
+          "content": {
+            "orderNumber": "ORD-2024-009",
+            "customerId": "customer_009",
+            "customerName": "James Taylor",
+            "orderDate": "2024-12-02T14:20:00Z",
+            "status": "delivered",
+            "items": [
+              {
+                "productId": "product_mouse_001",
+                "productName": "Wireless Gaming Mouse X",
+                "quantity": 1,
+                "unitPrice": 79.99,
+                "subtotal": 79.99
+              },
+              {
+                "productId": "product_keyboard_001",
+                "productName": "Mechanical RGB Keyboard Pro",
+                "quantity": 1,
+                "unitPrice": 159.99,
+                "subtotal": 159.99
+              },
+              {
+                "productId": "product_webcam_001",
+                "productName": "HD Pro Webcam 1080p",
+                "quantity": 1,
+                "unitPrice": 129.99,
+                "subtotal": 129.99
+              }
+            ],
+            "shipping": {
+              "method": "Express",
+              "cost": 12.99,
+              "address": "369 Willow Way, Miami, FL 33101",
+              "trackingNumber": "TRK4445556667"
+            },
+            "payment": {
+              "method": "PayPal",
+              "email": "james.taylor@example.com",
+              "transactionId": "TXN-FFF-666"
+            },
+            "subtotal": 369.97,
+            "tax": 29.6,
+            "total": 412.56
+          }
+        },
+        {
+          "name": "order_2024_010",
+          "content": {
+            "orderNumber": "ORD-2024-010",
+            "customerId": "customer_010",
+            "customerName": "Patricia Thomas",
+            "orderDate": "2024-11-30T10:00:00Z",
+            "status": "delivered",
+            "items": [
+              {
+                "productId": "product_projector_001",
+                "productName": "Smart 4K Projector",
+                "quantity": 1,
+                "unitPrice": 1299.99,
+                "subtotal": 1299.99
+              },
+              {
+                "productId": "product_speaker_001",
+                "productName": "Bluetooth Smart Speaker",
+                "quantity": 2,
+                "unitPrice": 199.99,
+                "subtotal": 399.98
+              }
+            ],
+            "shipping": {
+              "method": "Express",
+              "cost": 19.99,
+              "address": "741 Poplar Ct, Chicago, IL 60601",
+              "trackingNumber": "TRK8889990001"
+            },
+            "payment": {
+              "method": "Credit Card",
+              "last4": "7890",
+              "transactionId": "TXN-GGG-777"
+            },
+            "subtotal": 1699.97,
+            "tax": 136.0,
+            "total": 1855.96
+          }
+        },
+        {
+          "name": "order_2024_011",
+          "content": {
+            "orderNumber": "ORD-2024-011",
+            "customerId": "customer_011",
+            "customerName": "Christopher Moore",
+            "orderDate": "2024-12-06T15:45:00Z",
+            "status": "shipped",
+            "items": [
+              {
+                "productId": "product_drone_001",
+                "productName": "FlyPro 4K Drone",
+                "quantity": 1,
+                "unitPrice": 799.99,
+                "subtotal": 799.99
+              },
+              {
+                "productId": "product_powerbank_001",
+                "productName": "Ultra Capacity Power Bank 30000mAh",
+                "quantity": 2,
+                "unitPrice": 89.99,
+                "subtotal": 179.98
+              }
+            ],
+            "shipping": {
+              "method": "Standard",
+              "cost": 9.99,
+              "address": "852 Aspen Rd, Atlanta, GA 30301",
+              "trackingNumber": "TRK2223334445"
+            },
+            "payment": {
+              "method": "Credit Card",
+              "last4": "2345",
+              "transactionId": "TXN-HHH-888"
+            },
+            "subtotal": 979.97,
+            "tax": 78.4,
+            "total": 1068.36
+          }
+        },
+        {
+          "name": "order_2024_012",
+          "content": {
+            "orderNumber": "ORD-2024-012",
+            "customerId": "customer_012",
+            "customerName": "Amanda Jackson",
+            "orderDate": "2024-12-09T12:30:00Z",
+            "status": "processing",
+            "items": [
+              {
+                "productId": "product_printer_001",
+                "productName": "All-in-One Laser Printer",
+                "quantity": 1,
+                "unitPrice": 449.99,
+                "subtotal": 449.99
+              }
+            ],
+            "shipping": {
+              "method": "Standard",
+              "cost": 0.0,
+              "address": "963 Hickory Blvd, Nashville, TN 37201"
+            },
+            "payment": {
+              "method": "PayPal",
+              "email": "amanda.j@example.com",
+              "transactionId": "TXN-III-999"
+            },
+            "subtotal": 449.99,
+            "tax": 36.0,
+            "total": 485.99
+          }
+        }
+      ]
+    },
+    {
+      "name": "inventory",
+      "documents": [
+        {
+          "name": "warehouse_sf",
+          "content": {
+            "warehouseName": "San Francisco Distribution Center",
+            "location": {
+              "city": "San Francisco",
+              "state": "CA",
+              "zipCode": "94103"
+            },
+            "capacity": 50000,
+            "currentOccupancy": 38540,
+            "utilization": 77.08,
+            "manager": "Sarah Williams",
+            "contact": "+1-555-1111",
+            "operatingHours": "24/7"
+          }
+        },
+        {
+          "name": "stock_laptop_001",
+          "content": {
+            "productId": "product_laptop_001",
+            "productName": "UltraBook Pro 15",
+            "warehouse": "warehouse_sf",
+            "quantityOnHand": 45,
+            "quantityReserved": 8,
+            "quantityAvailable": 37,
+            "reorderLevel": 20,
+            "reorderQuantity": 50,
+            "lastRestocked": "2024-11-28",
+            "supplier": "TechSupply Inc.",
+            "costPerUnit": 899.99
+          }
+        },
+        {
+          "name": "stock_phone_001",
+          "content": {
+            "productId": "product_phone_001",
+            "productName": "SmartPhone X12",
+            "warehouse": "warehouse_sf",
+            "quantityOnHand": 120,
+            "quantityReserved": 15,
+            "quantityAvailable": 105,
+            "reorderLevel": 30,
+            "reorderQuantity": 100,
+            "lastRestocked": "2024-12-05",
+            "supplier": "Mobile Distributors LLC",
+            "costPerUnit": 649.99
+          }
+        }
+      ]
+    },
+    {
+      "name": "analytics",
+      "documents": [
+        {
+          "name": "sales_summary_2024",
+          "content": {
+            "year": 2024,
+            "totalRevenue": 2847456.78,
+            "totalOrders": 3421,
+            "averageOrderValue": 832.45,
+            "topSellingCategory": "Electronics",
+            "topSellingProduct": "SmartPhone X12",
+            "monthlyBreakdown": [
+              { "month": "January", "revenue": 234567.89, "orders": 287 },
+              { "month": "February", "revenue": 198234.56, "orders": 245 },
+              { "month": "March", "revenue": 256789.12, "orders": 312 },
+              { "month": "April", "revenue": 243567.45, "orders": 298 },
+              { "month": "May", "revenue": 267890.34, "orders": 324 },
+              { "month": "June", "revenue": 289456.78, "orders": 351 }
+            ],
+            "customerRetentionRate": 78.5,
+            "newCustomers": 1245,
+            "returningCustomers": 2176
+          }
+        },
+        {
+          "name": "customer_insights",
+          "content": {
+            "totalCustomers": 3421,
+            "activeCustomers": 2876,
+            "premiumMembers": 845,
+            "averageLifetimeValue": 2345.67,
+            "topSpendingCustomer": "customer_003",
+            "customersByState": [
+              { "state": "CA", "count": 1234, "percentage": 36.1 },
+              { "state": "NY", "count": 567, "percentage": 16.6 },
+              { "state": "TX", "count": 489, "percentage": 14.3 },
+              { "state": "WA", "count": 345, "percentage": 10.1 },
+              { "state": "FL", "count": 298, "percentage": 8.7 }
+            ],
+            "averageSatisfactionScore": 4.6,
+            "npsScore": 72
+          }
+        }
+      ]
+    }
+  ]
+}

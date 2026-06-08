@@ -1,0 +1,159 @@
+
+====================================[MAIN BRANCH SIMPLEDBMSD.MTS]==================================
+
+curl -X 'GET' http://localhost:3001/db/A
+
+curl -X 'POST' \
+  'http://localhost:3000/db' \
+  -H 'accept: application/json' \
+  -H 'Content-Type: application/json' \
+  -d '{
+  "name": "A"
+}'
+
+curl -X 'POST' \
+  'http://localhost:3000/db/A' \
+  -H 'accept: application/json' \
+  -H 'Content-Type: application/json' \
+  -d '{
+  "nr": 1
+}'
+
+
+
+
+
+===================================[WITH PROXY]===================================================
+
+curl -X 'POST' \
+  'http://localhost:4000/proxy/db' \
+  -H 'accept: application/json' \
+  -H 'Content-Type: application/json' \
+  -d '{
+  "name": "A"
+}'
+
+curl -X 'POST' \
+  'http://localhost:4000/proxy/db/A' \
+  -H 'accept: application/json' \
+  -H 'Content-Type: application/json' \
+  -d '{
+  "nr": 1
+}'
+
+
+curl -X 'DELETE' \
+  'http://localhost:4000/proxy/db' \
+  -H 'accept: application/json' \
+  -H 'Content-Type: application/json' \
+  -d '{
+  "name": "A"
+}'
+
+curl -X 'POST' \
+  'http://localhost:4000/proxy/db/A' \
+  -H 'accept: application/json' \
+  -H 'Content-Type: application/json' \
+  -d '{
+  "nr": -88
+}'
+
+curl -X 'DELETE' http://localhost:4000/proxy/db/A/7aa2d684-8f44-4ebc-bb5a-66e87761c1bf
+
+
+====[UPDATE DOC]
+curl -X 'PUT' \
+  'http://localhost:4000/proxy/db/A/576c4b8f-f8b7-4770-9bad-e790f1fdbdfd' \
+  -H 'accept: */*' \
+  -H 'Content-Type: application/json' \
+  -d '{
+  "age": 26,
+  "isActive": false
+}'
+
+=== [INSERT MANY]
+curl -X 'POST' \
+  'http://localhost:4000/proxy/db/A/insertMany' \
+  -H 'accept: application/json' \
+  -H 'Content-Type: application/json' \
+  -d '{
+  "documents": [
+    {
+      "name": "John Doe",
+      "age": 25,
+      "isActive": true
+    },
+    {
+      "name": "Jane Smith",
+      "age": 30,
+      "isActive": false
+    }
+  ]
+}'
+
+
+====== [SQL & NATLAN]
+curl -X 'POST' \
+  'http://localhost:4000/proxy/api/query/sql' \
+  -H 'accept: */*' \
+  -H 'Content-Type: application/json' \
+  -d '{
+  "query": "INSERT INTO USERS (ID, NAME, ACTIVE) VALUES (1, 'Alice', 1), (2, 'Bob', 0)",
+  "sql": "string"
+}'
+
+curl -X 'POST' \
+  'http://localhost:4000/proxy/api/query/sql' \
+  -H 'accept: */*' \
+  -H 'Content-Type: application/json' \
+  -d '{
+  "query": "INSERT INTO USERS (ID, NAME, ACTIVE) VALUES (1, 'Alice', 1), (2, 'Bob', 0)",
+  "sql": "string"
+}'
+
+curl -X 'POST' \
+  'http://localhost:4000/proxy/api/query/sql' \
+  -H 'accept: */*' \
+  -H 'Content-Type: application/json' \
+  -d '{
+  "query": "SELECT DISTINCT NAME FROM USERS WHERE ACTIVE = 1 ORDER BY NAME ASC LIMIT 10",
+  "sql": "string"
+}'
+
+curl -X POST http://localhost:4000/proxy/api/query/natural-language \
+  -H "Content-Type: application/json" \
+  -d '{"prompt": "Get all users older than 20"}'
+
+
+
+====[BULK]
+curl -X POST http://localhost:4000/proxy/db/A/bulk \
+  -H "Content-Type: application/json" \
+  -d '{
+    "operations": [
+      {
+        "type": "insert",
+        "document": {
+          "name": "Alice",
+          "age": 30
+          }
+        },
+        {
+          "type": "update",
+          "id": "d5c4fc2d-a60a-4f8e-9eeb-2fe25f4478ac",
+          "updates": {
+            "balls": 2
+          }
+        },
+        {
+          "type": "delete",
+          "id": "ae650761-e0e2-462d-8111-1ff8d3182ca8"
+        }
+      ]
+    }'
+
+======[dummy acc]
+curl -X POST http://localhost:4000/proxy/db/demo/loadDummy
+
+=====[wiki import]
+curl -X POST http://localhost:4000/proxy/db/A/wikipedia

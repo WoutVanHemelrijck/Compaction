@@ -1,0 +1,7 @@
+{
+  "name": "simpledbms-dbms",
+  "version": "1.0.0",
+  "description": "Core database engine, storage, indexing, durability and bulk import for SimpleDBMS",
+  "license": "ISC",
+  "type": "module"
+}

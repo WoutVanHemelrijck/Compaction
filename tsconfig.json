@@ -1,0 +1,61 @@
+{
+  "compilerOptions": {
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "NodeNext",
+    "target": "es2024",
+    "baseUrl": ".",
+    "paths": {
+      "@maboke123/raft-core": ["packages/raft-core/src/index.ts"],
+      "@maboke123/raft-core/testing": ["packages/raft-core/src/testing.ts"],
+      "@maboke123/raft-grpc": ["packages/raft-grpc/src/index.ts"]
+    },
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "moduleResolution": "NodeNext",
+    "allowUnusedLabels": false,
+    "allowUnreachableCode": false,
+    //"exactOptionalPropertyTypes": true,
+    "noFallthroughCasesInSwitch": true,
+    "noImplicitOverride": true,
+    "noImplicitReturns": true,
+    "noPropertyAccessFromIndexSignature": true,
+    //"noUncheckedIndexedAccess": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "verbatimModuleSyntax": false,
+    "isolatedModules": true,
+    "allowJs": false,
+    //"checkJs": false,
+    "allowSyntheticDefaultImports": true,
+    "rootDir": ".",
+    "sourceMap": true,
+    "outDir": "build",
+    "noImplicitAny": true,
+  },
+  "ts-node": { "esm": true },
+  "references": [
+    { "path": "./packages/raft-core" },
+    { "path": "./packages/raft-grpc" }
+  ],
+  "exclude": [
+    "build",
+    "node_modules",
+    "**/dist/**",
+    "**/node_modules/**",
+    "packages/raft-core/**",
+    "packages/raft-grpc/**"
+  ],
+  "include": [
+    "packages/auth/**/*.mts",
+    "packages/nlp/**/*.mts",
+    "packages/query-language/**/*.mts",
+    "packages/dbms/**/*.mts",
+    "apps/api-server/**/*.mts",
+    "apps/benchmarks/**/*.mts",
+    "apps/frontend/**/*.mts",
+    "vitest.config.ts",
+    "vitest.nlp.config.ts"
+  ]
+}

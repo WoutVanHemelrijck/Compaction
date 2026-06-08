@@ -1,0 +1,38 @@
+node_modules/
+build/
+coverage/
+dist/
+
+.DS_Store
+Thumbs.db
+
+# vim swap files
+*.swp
+
+testdb
+
+*.tsbuildinfo
+
+.vscode/
+
+data/generated-database
+
+mydb.db
+mydb.wal
+mydb-heap.db
+mydb-heap.wal
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Large data files
+packages/dbms/big-data-import/wp.xml
+
+frontend-dist/
+src/wiki/data
+
+.claude/
+scripts/start-backend.sh
+CLAUDE.md

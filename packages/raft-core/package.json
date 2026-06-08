@@ -1,0 +1,47 @@
+{
+  "name": "@maboke123/raft-core",
+  "version": "0.2.1",
+  "description": "A TypeScript implementation of the Raft consensus algorithm",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/maboke123/raft-consensus-algorithm.git"
+  },
+  "bugs": {
+    "url": "https://github.com/maboke123/raft-consensus-algorithm/issues"
+  },
+  "homepage": "https://github.com/maboke123/raft-consensus-algorithm#readme",
+  "license": "MIT",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "require": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./testing": {
+      "import": "./dist/testing.js",
+      "require": "./dist/testing.js",
+      "types": "./dist/testing.d.ts"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "docs": "typedoc --options typedoc.json",
+    "prepublishOnly": "npm run build && npm test"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@types/node": "25.2.3",
+    "typescript": "5.9.3",
+    "vitest": "4.0.18",
+    "@vitest/coverage-v8": "4.0.18"
+  }
+}

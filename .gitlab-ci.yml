@@ -1,0 +1,58 @@
+image: node:24
+
+stages:
+  - build
+  - test
+  - coverage
+  - lint
+  - prettier-check
+
+cache:
+  key:
+    files:
+      - package-lock.json
+  paths:
+    - node_modules/
+
+download_dependencies:
+  stage: build
+  script:
+    - npm ci
+    - npm run build
+  artifacts:
+    paths:
+      - build/
+
+test:fast:
+  stage: test
+  needs: [download_dependencies]
+  script:
+    - npm run test
+
+test:nlp:
+  stage: test
+  needs: [download_dependencies]
+  script:
+    - npm run test:nlp
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+    - when: never
+
+coverage:
+  stage: coverage
+  needs: [download_dependencies]
+  script:
+    - npm run coverage
+  coverage: '/All files[^|]*\|[^|]*\s+([\d\.]+)/'
+
+eslint:
+  stage: lint
+  needs: [download_dependencies]
+  script:
+    - npm run lint
+
+prettier-check:
+  stage: prettier-check
+  needs: [download_dependencies]
+  script:
+    - npm run prettier-check

@@ -1,0 +1,7 @@
+{
+  "name": "simpledbms-api-server",
+  "version": "1.0.0",
+  "description": "REST API daemon for SimpleDBMS",
+  "license": "ISC",
+  "type": "module"
+}
