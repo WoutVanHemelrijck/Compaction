@@ -10,7 +10,7 @@
   --bg:#0d1117; --surface:#161b22; --surface2:#1e2530; --border:#30363d;
   --text:#c9d1d9; --muted:#768390;
   --header:#58a6ff; --catalog:#bc8cff; --primary-idx:#3fb950; --secondary-idx:#2dd4bf;
-  --live:#f59e0b; --free:#6e7681; --orphan:#f85149;
+  --document:#f59e0b; --live:#8b949e; --free:#6e7681; --orphan:#f85149;
   --radius:8px;
   font-family:'Segoe UI',system-ui,sans-serif; font-size:14px;
 }
@@ -24,8 +24,8 @@ header p { color:var(--muted); font-size:12px; }
 .dot { width:8px; height:8px; border-radius:50%; background:var(--document); }
 
 .layout { display:grid; grid-template-columns:1fr 320px; grid-template-rows:1fr auto; flex:1; overflow:hidden; }
-.main { grid-column:1; grid-row:1; padding:18px; overflow-y:auto; display:flex; flex-direction:column; gap:16px; }
-.sidebar { grid-column:2; grid-row:1/3; background:var(--surface); border-left:1px solid var(--border);
+.main { grid-column:1; grid-row:1; min-height:0; padding:18px; overflow-y:auto; display:flex; flex-direction:column; gap:16px; }
+.sidebar { grid-column:2; grid-row:1/3; min-height:0; background:var(--surface); border-left:1px solid var(--border);
            overflow-y:auto; padding:16px; display:flex; flex-direction:column; gap:16px; }
 .log-panel { grid-column:1; grid-row:2; border-top:1px solid var(--border); background:var(--surface);
              padding:10px 18px; max-height:170px; overflow-y:auto; }
@@ -59,6 +59,7 @@ header p { color:var(--muted); font-size:12px; }
 .b-catalog   { background:var(--catalog); }
 .b-collection{ background:var(--primary-idx); }
 .b-index     { background:var(--secondary-idx); }
+.b-document  { background:var(--document); }
 .b-live      { background:var(--live); }
 .b-free      { background:transparent; color:var(--free); border:2px dashed var(--free) !important; }
 .b-orphan    { background:transparent; color:var(--orphan); border:2px dashed var(--orphan) !important; }
@@ -105,7 +106,8 @@ button:disabled { opacity:.4; cursor:not-allowed; }
                color:var(--orphan); border:1px solid var(--border); }
 
 /* documents list */
-.docs { display:flex; flex-direction:column; gap:6px; margin-top:8px; }
+.docs { display:flex; flex-direction:column; gap:6px; margin-top:8px;
+        max-height:330px; overflow-y:auto; padding-right:4px; }
 .doc { background:var(--surface2); border:1px solid var(--border); border-radius:6px; padding:8px 10px;
        display:flex; align-items:center; gap:8px; }
 .doc .info { flex:1; min-width:0; }
@@ -142,7 +144,7 @@ button:disabled { opacity:.4; cursor:not-allowed; }
 <header>
   <div>
     <h1>⚡ SimpleDBMS — shrinkDatabase</h1>
-    <p>Live view of the B+ tree index file that <code>shrinkDatabase()</code> compacts in place</p>
+    <p>Live view of the database file — documents + B+ tree indexes — that <code>shrinkDatabase()</code> compacts in place</p>
   </div>
   <div class="status">
     <span class="dot" id="dot"></span>
@@ -155,7 +157,7 @@ button:disabled { opacity:.4; cursor:not-allowed; }
 
     <!-- stats -->
     <div class="card">
-      <div class="card-title">Index File — <code id="coll-name">_demo</code> (FreeBlockFile that shrink operates on)</div>
+      <div class="card-title">Database File — <code id="coll-name">_demo</code> (one FreeBlockFile: documents + indexes, the thing shrink compacts)</div>
       <div class="stats">
         <div class="stat"><div class="label">Blocks</div><div class="value" id="s-total">—</div><div class="sub" id="s-size">— B</div></div>
         <div class="stat"><div class="label">Live</div><div class="value" style="color:var(--primary-idx)" id="s-live">—</div><div class="sub">in use</div></div>
@@ -168,7 +170,7 @@ button:disabled { opacity:.4; cursor:not-allowed; }
         <div class="frag-bar"><div class="frag-fill" id="frag-fill" style="width:0%;background:var(--primary-idx)"></div></div>
       </div>
       <div class="label-sm" style="margin-top:10px;border-top:1px solid var(--border);padding-top:8px;">
-        Separate <strong>heap file</strong> (document blobs — what shrink does <em>not</em> touch):
+        <strong>Documents</strong> are stored as blobs in this same file:
         <span id="heap-summary" style="color:var(--text);">—</span>
       </div>
     </div>
@@ -182,7 +184,7 @@ button:disabled { opacity:.4; cursor:not-allowed; }
           <span><i style="background:var(--catalog)"></i>Catalog</span>
           <span><i style="background:var(--primary-idx)"></i>Primary idx</span>
           <span><i style="background:var(--secondary-idx)"></i>Secondary idx</span>
-          <span><i style="background:var(--live)"></i>Live node</span>
+          <span><i style="background:var(--document)"></i>Document</span>
           <span><i style="border:1px dashed var(--free)"></i>Free hole</span>
           <span><i style="border:1px dashed var(--orphan)"></i>Orphan</span>
         </div>
@@ -234,15 +236,22 @@ button:disabled { opacity:.4; cursor:not-allowed; }
       </div>
       <button class="btn-primary" id="btn-insert" onclick="insertDoc()">+ Insert</button>
       <div class="label-sm" style="margin-top:6px;">
-        Each copy adds a key to the primary &amp; secondary B+ trees (the index file shown here).
-        <strong>Pad size</strong> bloats the document body — that payload lands in the separate
-        <em>heap</em> file (see the heap line in the stats), not the index.
+        Each document is stored as a <strong>blob</strong> in this file (orange), plus its keys go into
+        the B+ trees. So <strong>Copies</strong> and <strong>Pad size</strong> both grow the file —
+        more/bigger documents mean more blocks. To create holes: insert many, then delete most below.
       </div>
     </div>
 
     <div>
       <div class="s-title">Documents (<span id="doc-count">0</span>)</div>
-      <div class="docs" id="docs"><div class="empty">Empty — insert a document to begin.</div></div>
+      <div class="field" style="gap:8px;align-items:flex-end;">
+        <label class="label-sm" style="flex:1;">Delete first
+          <input type="number" id="f-del" value="10" min="1" style="width:100%;margin-top:3px;" /></label>
+        <button class="btn-mini" id="btn-delmany" style="margin:0;padding:7px 10px;" onclick="deleteMany()">Delete N</button>
+        <button class="btn-mini" id="btn-delall" style="margin:0;padding:7px 10px;" onclick="deleteMany('all')">All</button>
+      </div>
+      <div class="label-sm" style="margin-top:6px;">Deleting frees B+ tree nodes → <strong>holes &amp; orphans</strong> for shrink to reclaim.</div>
+      <div class="docs" id="docs" style="margin-top:8px;"><div class="empty">Empty — insert a document to begin.</div></div>
     </div>
 
     <div>
@@ -267,9 +276,9 @@ button:disabled { opacity:.4; cursor:not-allowed; }
 const COLLECTION = '_demo';
 const KIND_LABEL = {
   header:'Header', catalog:'Catalog tree', collection:'Primary index',
-  index:'Secondary index', live:'Live B+ tree node', free:'Free hole', orphan:'Orphan',
+  index:'Secondary index', document:'Document blob', live:'Live block', free:'Free hole', orphan:'Orphan',
 };
-const KIND_SHORT = { header:'H', catalog:'CAT', collection:'PK', index:'IDX', live:'●', free:'·', orphan:'✕' };
+const KIND_SHORT = { header:'H', catalog:'CAT', collection:'PK', index:'IDX', document:'DOC', live:'●', free:'·', orphan:'✕' };
 
 let busy = false;
 let lastData = null;
@@ -299,10 +308,10 @@ function render(data, animate = false) {
   fill.style.background = data.fragmentationPct > 50 ? 'var(--orphan)'
                         : data.fragmentationPct > 20 ? 'var(--live)' : 'var(--primary-idx)';
 
-  // heap summary
-  const heap = data.heap || {};
+  // document store summary
+  const ds = data.docStore || {};
   document.getElementById('heap-summary').textContent =
-    `${heap.docCount ?? 0} document blob(s), ${fmt(heap.payloadBytes ?? 0)} of payload`;
+    `${ds.docCount ?? 0} document blob(s), ${fmt(ds.payloadBytes ?? 0)} of payload`;
 
   // grid
   const grid = document.getElementById('grid');
@@ -429,6 +438,18 @@ function renderBlockContent(b) {
     return;
   }
 
+  if (c.role === 'document') {
+    const data = c.data || {};
+    const rows = Object.entries(data)
+      .map(([k, v]) => `<tr><td>${esc(k)}</td><td class="v">${esc(fmtVal(v))}</td></tr>`).join('');
+    let html = `<div class="bc-meta"><div><span class="k">docId</span><b>${esc(c.docId)}</b></div>` +
+      (c.chain && c.chain.length > 1 ? `<div><span class="k">spans blocks</span><b>${c.chain.join(' → ')}</b></div>` : '') + `</div>`;
+    html += `<table class="bc-kv"><tr><th>field</th><th>value</th></tr>${rows || '<tr><td colspan=2 class="bc-note">empty</td></tr>'}</table>`;
+    html += `<div class="bc-note" style="margin-top:6px;">Stored as a blob in this file. shrink moves the whole chain and rewrites the primary-index pointer to it — so the document survives intact.</div>`;
+    host.innerHTML = html;
+    return;
+  }
+
   if (c.role === 'btree-node') {
     const keys = c.keys || [];
     let meta = `<div class="bc-meta">` +
@@ -442,7 +463,7 @@ function renderBlockContent(b) {
       const vals = c.values || [];
       const rows = keys.map((k, i) =>
         `<tr><td>${esc(fmtVal(k))}</td><td class="v">${esc(fmtVal(vals[i]))}</td></tr>`).join('');
-      body = `<table class="bc-kv"><tr><th>key</th><th>value (→ heap block / root)</th></tr>${rows || '<tr><td colspan=2 class="bc-note">empty</td></tr>'}</table>`;
+      body = `<table class="bc-kv"><tr><th>key</th><th>value (→ block id)</th></tr>${rows || '<tr><td colspan=2 class="bc-note">empty</td></tr>'}</table>`;
       if (c.nextLeafBlockId && c.nextLeafBlockId !== 0)
         body += `<div class="bc-note" style="margin-top:6px;">next leaf → block ${c.nextLeafBlockId}</div>`;
     } else {
@@ -506,11 +527,10 @@ async function insertDoc() {
 
   const prevDocs = (lastData?.documents || []).length;
   const prevBlocks = lastData?.totalBlocks ?? 0;
-  const prevHeap = lastData?.heap?.fileSizeBytes ?? 0;
   setBusy(true);
   const label = base.name ? esc(String(base.name)) : 'document';
   log('⏳', `Inserting <span class="hl">${count}</span> ${count > 1 ? 'copies' : 'copy'} of ${label}` +
-    (padKB ? ` padded to ~<span class="hl">${padKB} KB</span>` : '') + ' → B+ trees…');
+    (padKB ? ` padded to ~<span class="hl">${padKB} KB</span>` : '') + ' …');
   try {
     const makeDoc = (i) => {
       const doc = { ...base };
@@ -521,16 +541,14 @@ async function insertDoc() {
     if (count === 1) {
       await api('POST', `/db/${COLLECTION}`, makeDoc(0));
     } else {
-      // One Raft command for the whole batch (avoids the per-insert apply delay).
       const documents = Array.from({ length: count }, (_, i) => makeDoc(i));
       await api('POST', `/db/${COLLECTION}/insertMany`, { documents });
     }
     const data = await pollUntil(d => (d.documents?.length ?? 0) >= prevDocs + count, Math.max(5000, count * 200));
     const grew = data.totalBlocks - prevBlocks;
-    const heapGrew = (data.heap?.fileSizeBytes ?? 0) - prevHeap;
-    log('✅', `Inserted <span class="hl">${count}</span> doc(s) — index file ` +
-      `${grew > 0 ? `grew <span class="hl">+${grew}</span> block(s) → ${data.totalBlocks}` : `unchanged at ${data.totalBlocks} (keys fit existing nodes)`}` +
-      (heapGrew > 0 ? `; heap +<span class="hl">${fmt(heapGrew)}</span>` : ''));
+    log('✅', `Inserted <span class="hl">${count}</span> doc(s) — file ` +
+      `${grew > 0 ? `grew <span class="hl">+${grew}</span> block(s) → ${data.totalBlocks}` : `unchanged at ${data.totalBlocks}`}` +
+      `; ${(data.docStore?.docCount ?? 0)} doc blobs, ${fmt(data.docStore?.payloadBytes ?? 0)}`);
   } catch (e) { log('❌', 'Insert failed: ' + (e.message || e)); }
   setBusy(false);
 }
@@ -552,6 +570,29 @@ async function deleteDoc(docId, name) {
     if (data.fragmentationPct > 0)
       log('⚠️', `Index file is now <span class="hl">${data.fragmentationPct}%</span> reclaimable — run shrink to compact it`);
   } catch (e) { log('❌', 'Delete failed: ' + (e.message || e)); }
+  setBusy(false);
+}
+
+async function deleteMany(mode) {
+  if (busy) return;
+  const all = (lastData?.documents || []);
+  if (!all.length) { log('⚠️', 'No documents to delete'); return; }
+  let n = mode === 'all' ? all.length : Math.max(1, Math.min(all.length, Number(document.getElementById('f-del').value) || 0));
+  const ids = all.slice(0, n).map(d => d.docId);
+  const prevBlocks = lastData?.totalBlocks ?? 0;
+  const target = all.length - ids.length;
+  setBusy(true);
+  log('⏳', `Deleting <span class="hl">${ids.length}</span> document(s) in one command — freeing B+ tree nodes…`);
+  try {
+    const r = await api('POST', `/db/demo/deleteMany/${COLLECTION}`, { ids });
+    if (r && r.ok === false) throw new Error(r.error || 'deleteMany failed');
+    const data = await pollUntil(d => (d.documents?.length ?? 0) <= target, Math.max(6000, ids.length * 120));
+    const delta = data.totalBlocks - prevBlocks;
+    log('✅', `Deleted <span class="hl">${ids.length}</span> — index now ${data.totalBlocks} blocks ` +
+      `(${delta >= 0 ? '+' : ''}${delta}); <span class="hl">${data.freeListCount}</span> hole(s) + ` +
+      `<span class="hl">${data.orphanCount}</span> orphan(s), ${data.fragmentationPct}% reclaimable`);
+    if (data.reclaimableCount > 0) log('⚠️', 'Run shrinkDatabase() to relocate live blocks and truncate the file.');
+  } catch (e) { log('❌', 'Bulk delete failed: ' + (e.message || e)); }
   setBusy(false);
 }
 
@@ -578,8 +619,10 @@ async function runShrink() {
 /* ── helpers ── */
 function setBusy(b) {
   busy = b;
-  document.getElementById('btn-insert').disabled = b;
-  document.getElementById('btn-shrink').disabled = b;
+  ['btn-insert', 'btn-shrink', 'btn-delmany', 'btn-delall'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.disabled = b;
+  });
   document.querySelectorAll('.doc .btn-mini').forEach(x => x.disabled = b);
 }
 function log(icon, msg) {

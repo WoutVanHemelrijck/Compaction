@@ -27,12 +27,7 @@ import {
 import { PasswordHasher } from '../../packages/auth/password-hashing.mjs';
 import { readFile } from 'fs/promises';
 import { rename, writeFile, unlink, access } from 'node:fs/promises';
-import {
-  compactDatabase,
-  shrinkDatabase,
-  buildBlockMap,
-  inspectIndexContents,
-} from '../../packages/dbms/durability/compaction/compaction.mjs';
+import { compactDatabase, shrinkDatabase } from '../../packages/dbms/durability/compaction/compaction.mjs';
 import { RWLock } from '../../packages/dbms/durability/compaction/rw-lock.mjs';
 import {
   AutoCompactor,
@@ -364,17 +359,7 @@ export class daemonFSM {
           const collectionName = payload['name'];
           const documents = payload['documents'];
 
-          // Auto-create the collection if missing, mirroring the single-insert path.
-          let collection: Collection;
-          try {
-            collection = await this.db.getCollection(collectionName);
-          } catch (error) {
-            if (error instanceof Error && error.message.includes('not found')) {
-              collection = await this.db.createCollection(collectionName);
-            } else {
-              throw error;
-            }
-          }
+          const collection: Collection = await this.db.getCollection(collectionName);
           // Ensure secondary indexes are created during bulk insert
           collection.setAutoCreateSecondaryIndexesOnInsert(true);
           await collection.insertMany(documents as Array<Omit<Document, 'id'> & { id?: string }>);
@@ -534,7 +519,6 @@ export class daemonFSM {
 
 export function spawnDaemon(port: number, nodeId: string, wellKnownPeers: { id: string; address: string }[]) {
   let node: RaftNode;
-  let fsm: daemonFSM | null = null;
 
   const __filename = fileURLToPath(import.meta.url);
   const __dirname = path.dirname(__filename);
@@ -2346,177 +2330,6 @@ export function spawnDaemon(port: number, nodeId: string, wellKnownPeers: { id: 
 
 *********************************************/
   /**
-   * GET /db/demo/index-inspect/:collection
-   * Read-only snapshot of the B+ tree INDEX file (the FreeBlockFile that
-   * shrinkDatabase actually relocates and truncates). Classifies every block
-   * exactly as shrink does — header, free-list hole, orphan, or live B+ tree
-   * node (catalog / collection / secondary index) — and also lists the
-   * documents in the given collection so the demo can offer them for deletion.
-   * No authentication required — intended for the compaction demo UI.
-   */
-  app.get('/db/demo/index-inspect/:collection', async (req, res) => {
-    try {
-      const collectionName = req.params.collection;
-      const fbf = db.getFreeBlockFile();
-      const map = await buildBlockMap(fbf);
-
-      const blockSize = fbf.blockSize;
-      const totalBlocks = map.totalBlocks;
-      const fileSizeBytes = totalBlocks * blockSize;
-
-      // ── Decode the actual contents of each block (not just bits) ──────────
-      // inspectIndexContents walks the real B+ trees from the header roots and
-      // decodes each node accurately (keys, values, child pointers) — independent
-      // of shrink's relocation walk, which can mis-tag index nodes as document
-      // blobs in separate-heap setups.
-      const KEY_LIMIT = 64;
-      const nodeContents = await inspectIndexContents(fbf);
-
-      type BlockContent = Record<string, unknown>;
-      const content = new Map<number, BlockContent>();
-
-      // Header block 0
-      const freeListHead = await fbf.debug_getFreeListHead();
-      content.set(0, {
-        role: 'header',
-        description: 'Stores the free-list head pointer and the database header (B+ tree roots).',
-        freeListHead,
-        header: map.header,
-      });
-
-      // Live B+ tree nodes (catalog / primary / secondary), decoded accurately.
-      for (const [startId, node] of nodeContents) {
-        const keys = node.keys.slice(0, KEY_LIMIT);
-        const decoded: BlockContent = {
-          role: 'btree-node',
-          tree: node.tree,
-          field: node.field,
-          nodeType: node.nodeType,
-          keyCount: node.keys.length,
-          keys,
-          chain: node.chain,
-        };
-        if (node.nodeType === 'leaf') {
-          decoded['values'] = (node.values ?? []).slice(0, KEY_LIMIT);
-          decoded['nextLeafBlockId'] = node.nextLeafBlockId;
-          decoded['prevLeafBlockId'] = node.prevLeafBlockId;
-        } else if (node.nodeType === 'internal') {
-          decoded['childBlockIds'] = node.childBlockIds ?? [];
-        }
-        if (node.keys.length > KEY_LIMIT) decoded['keysTruncated'] = true;
-        content.set(startId, decoded);
-        for (let i = 1; i < node.chain.length; i++) {
-          content.set(node.chain[i], {
-            role: 'continuation',
-            description: `Continuation of the B+ tree node blob starting at block ${startId}.`,
-            blobStart: startId,
-            chain: node.chain,
-          });
-        }
-      }
-
-      // Free-list holes and orphans
-      for (const id of map.freeListIds) {
-        const raw = await fbf.readRawBlock(id);
-        content.set(id, {
-          role: 'free',
-          description: 'A hole on the free list, reused on the next allocation.',
-          nextFreePointer: raw.readUInt32LE(0),
-        });
-      }
-      for (let id = 1; id < totalBlocks; id++) {
-        if (map.blockKind[id] === 'orphan') {
-          content.set(id, {
-            role: 'orphan',
-            description: 'Abandoned by the B+ tree without being re-linked into the free list; only shrink reclaims it.',
-          });
-        }
-      }
-
-      // Colour each block by its accurate tree role (from inspectIndexContents)
-      // rather than buildBlockMap's relocation-walk tag, which mis-labels index
-      // nodes as 'document'/'live' in separate-heap setups. Free/orphan/header
-      // classification still comes from buildBlockMap so the grid agrees with
-      // exactly what shrink reclaims.
-      const treeToKind: Record<string, string> = {
-        catalog: 'catalog',
-        'primary index': 'collection',
-        'secondary index': 'index',
-      };
-      const nodeKind = new Map<number, string>();
-      for (const node of nodeContents.values()) {
-        const kind = treeToKind[node.tree] ?? 'live';
-        for (const blockId of node.chain) nodeKind.set(blockId, kind);
-      }
-      const blocks = Array.from({ length: totalBlocks }, (_, id) => {
-        const mapKind = map.blockKind[id] ?? 'free';
-        let kind: string;
-        if (id === 0) kind = 'header';
-        else if (mapKind === 'free') kind = 'free';
-        else if (mapKind === 'orphan') kind = 'orphan';
-        else kind = nodeKind.get(id) ?? 'live';
-        let c = content.get(id) ?? null;
-        if (!c && kind !== 'free' && kind !== 'orphan') {
-          c = { role: 'live', description: 'Live block that shrink preserves (may be relocated to a lower slot).' };
-        }
-        return { id, kind, content: c };
-      });
-
-      const orphanCount = blocks.filter((b) => b.kind === 'orphan').length;
-      const freeListCount = map.freeListIds.length;
-      const reclaimableCount = map.freeBlockIds.size; // free-list holes + orphans
-      const liveCount = totalBlocks - 1 - reclaimableCount; // exclude header
-      const usableBlocks = totalBlocks - 1; // exclude header
-      const fragmentationPct = usableBlocks > 0 ? Math.round((reclaimableCount / usableBlocks) * 100) : 0;
-
-      // List documents in the demo collection (for the delete picker) plus the
-      // total payload stored in the SEPARATE heap file where blobs actually live.
-      // (The heap's block count is read from its summed blob sizes, since the
-      // heap commits lazily and its on-disk size lags behind live writes.)
-      const documents: Array<{ docId: string; sizeBytes: number; data: Record<string, unknown> | null }> = [];
-      let heapPayloadBytes = 0;
-      const collectionNames = await db.getCollectionNames();
-      if (collectionNames.includes(collectionName)) {
-        const collection = await db.getCollection(collectionName);
-        const heap = collection.getDocumentHeap();
-        const docEntries = await collection.getDocumentBlockIds();
-        for (const { docId, startBlockId } of docEntries) {
-          let data: Record<string, unknown> | null = null;
-          let sizeBytes = 0;
-          try {
-            const buf = await heap.readBlob(startBlockId);
-            sizeBytes = buf.length;
-            heapPayloadBytes += sizeBytes;
-            if (buf.length > 0) data = JSON.parse(buf.toString()) as Record<string, unknown>;
-          } catch {
-            /* skip unreadable blob */
-          }
-          documents.push({ docId, sizeBytes, data });
-        }
-      }
-
-      res.json({
-        ok: true,
-        collectionName,
-        totalBlocks,
-        blockSize,
-        fileSizeBytes,
-        freeListIds: map.freeListIds,
-        freeListCount,
-        orphanCount,
-        reclaimableCount,
-        liveCount,
-        fragmentationPct,
-        blocks,
-        documents,
-        heap: { docCount: documents.length, payloadBytes: heapPayloadBytes },
-      });
-    } catch (error) {
-      res.status(500).json({ ok: false, error: (error as Error).message });
-    }
-  });
-
-  /**
    * @swagger
    * /db/compact:
    *   post:
@@ -2596,7 +2409,6 @@ export function spawnDaemon(port: number, nodeId: string, wellKnownPeers: { id: 
       const reopenedHeapFile = new RealFile(currentHeapPath);
       const reopenedHeapWalFile = new RealFile(currentHeapWalPath);
       db = await SimpleDBMS.open(reopenedDbFile, reopenedWalFile, reopenedHeapFile, reopenedHeapWalFile);
-      if (fsm) fsm.setDB(db);
 
       console.log(
         `Database compacted: ${result.sizeBefore} -> ${result.sizeAfter} bytes ` +
@@ -2612,7 +2424,7 @@ export function spawnDaemon(port: number, nodeId: string, wellKnownPeers: { id: 
 
   /**
    * @swagger
-   * /db/demo/shrink:
+   * /db/shrink:
    *   post:
    *     summary: Shrink the database file by reclaiming unused space
    *     description: >
@@ -2642,10 +2454,7 @@ export function spawnDaemon(port: number, nodeId: string, wellKnownPeers: { id: 
    *       500:
    *         description: Shrink failed
    */
-  // NOTE: registered under /db/demo/ so the multi-segment path does not collide
-  // with the single-segment `POST /db/:collection` insert route defined earlier
-  // (which would otherwise treat "shrink" as a collection name and insert a doc).
-  app.post('/db/demo/shrink', async (_req, res) => {
+  app.post('/db/shrink', async (_req, res) => {
     try {
       const result = await shrinkDatabase(db.getFreeBlockFile());
 
@@ -2656,7 +2465,6 @@ export function spawnDaemon(port: number, nodeId: string, wellKnownPeers: { id: 
       const reopenedHeapFile = new RealFile(currentHeapPath);
       const reopenedHeapWalFile = new RealFile(currentHeapWalPath);
       db = await SimpleDBMS.open(reopenedDbFile, reopenedWalFile, reopenedHeapFile, reopenedHeapWalFile);
-      if (fsm) fsm.setDB(db);
 
       console.log(
         `Database shrunk: ${result.sizeBefore} -> ${result.sizeAfter} bytes ` +
@@ -3996,7 +3804,6 @@ export function spawnDaemon(port: number, nodeId: string, wellKnownPeers: { id: 
 
         const logpath: string = `./data/generated-database/${nodeId}`;
         const FSM: daemonFSM = new daemonFSM();
-        fsm = FSM;
         node = new RaftNode({
           //
           config: {
