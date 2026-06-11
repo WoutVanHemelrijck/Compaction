@@ -238,7 +238,9 @@ button:disabled { opacity:.4; cursor:not-allowed; }
       <div class="label-sm" style="margin-top:6px;">
         Each document is stored as a <strong>blob</strong> in this file (orange), plus its keys go into
         the B+ trees. So <strong>Copies</strong> and <strong>Pad size</strong> both grow the file —
-        more/bigger documents mean more blocks. To create holes: insert many, then delete most below.
+        more/bigger documents mean more blocks (a doc &gt; 4 KB chains across several). Pad bytes are
+        <em>random</em> on purpose: the storage layer compresses every blob, so repeated text would
+        just collapse back to one block. To create holes: insert many, then delete most below.
       </div>
     </div>
 
@@ -523,7 +525,11 @@ async function insertDoc() {
 
   const count = Math.max(1, Math.min(500, Number(document.getElementById('f-count').value) || 1));
   const padKB = Math.max(0, Math.min(2048, Number(document.getElementById('f-pad').value) || 0));
-  const filler = padKB > 0 ? 'x'.repeat(padKB * 1024) : null;
+  // Incompressible filler: the storage layer compresses every blob before
+  // writing, so a repeated character (e.g. "xxxx…") would collapse to ~nothing
+  // and still fit in one block. Random base64 can't be compressed, so the
+  // document genuinely occupies ⌈size / 4 KB⌉ blocks.
+  const filler = padKB > 0 ? incompressibleFiller(padKB * 1024) : null;
 
   const prevDocs = (lastData?.documents || []).length;
   const prevBlocks = lastData?.totalBlocks ?? 0;
@@ -641,6 +647,19 @@ function fmt(n) {
   return (n / 1024 / 1024).toFixed(2) + ' MB';
 }
 function esc(s) { return String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+// ~targetBytes of incompressible ASCII (random bytes → base64), chunked to stay
+// under the 65536-byte crypto.getRandomValues limit.
+function incompressibleFiller(targetBytes) {
+  let out = '';
+  while (out.length < targetBytes) {
+    const arr = new Uint8Array(49152); // 48 KB random → 64 KB base64
+    crypto.getRandomValues(arr);
+    let bin = '';
+    for (let i = 0; i < arr.length; i++) bin += String.fromCharCode(arr[i]);
+    out += btoa(bin);
+  }
+  return out.slice(0, targetBytes);
+}
 
 /* ── init ── */
 async function refresh() {
