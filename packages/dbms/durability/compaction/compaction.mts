@@ -314,6 +314,366 @@ interface BlobInfo {
   chain: number[];
   kind: 'node' | 'document';
   treeKind: TreeKind;
+  /** Decoded B+ tree node JSON (keys/values/childBlockIds), captured during the walk for inspection. */
+  nodeJson?: unknown;
+}
+
+/** Human-readable classification for a single block, used by inspection tooling. */
+export type BlockKind = 'header' | 'free' | 'orphan' | 'catalog' | 'collection' | 'index' | 'document';
+
+/** Parsed block-0 header that maps the on-disk B+ tree roots. */
+interface DatabaseHeader {
+  catalogRootBlockId: number;
+  collections: { [name: string]: { rootBlockId: number; indexes: { [field: string]: number } } };
+}
+
+/**
+ * Read-only block map of a FreeBlockFile. This is exactly the view
+ * {@link shrinkDatabase} builds in its Phase 1 — exposed separately so demo and
+ * inspection tooling can show precisely which blocks shrink would reclaim and
+ * relocate, without ever mutating the file.
+ */
+export interface FreeBlockFileBlockMap {
+  totalBlocks: number;
+  /** Per-block live/free status; array index === block id. */
+  blockStatus: Array<'FREE' | 'LIVE' | undefined>;
+  /** Human-readable kind per block; array index === block id. */
+  blockKind: BlockKind[];
+  /** Block ids in free-list order (the linked list of holes). */
+  freeListIds: number[];
+  /** Every reclaimable block: free-list blocks PLUS orphaned (unreachable) blocks. */
+  freeBlockIds: Set<number>;
+  /** One entry per live blob (B+ tree node chain or document chain). */
+  blobInfos: BlobInfo[];
+  /** Parsed block-0 header (B+ tree roots), or null when block 0 holds no header. */
+  header: DatabaseHeader | null;
+  /** False when block 0 holds no header (empty DB); the tree walk is then skipped. */
+  headerPresent: boolean;
+}
+
+/**
+ * Walks a FreeBlockFile and classifies every block exactly as
+ * {@link shrinkDatabase} does internally: free-list blocks, live B+ tree nodes
+ * (catalog / collection / secondary index), live document blobs, and orphaned
+ * blocks that were abandoned without being returned to the free list.
+ *
+ * Purely read-only — it stages no writes and never truncates. `shrinkDatabase`
+ * delegates its Phase 1 to this function so the inspection view and the real
+ * relocation always agree on which blocks are reclaimable.
+ *
+ * @param {FreeBlockFile} fbf - The open FreeBlockFile to inspect.
+ * @returns {Promise<FreeBlockFileBlockMap>} The classified block map.
+ */
+export async function buildBlockMap(fbf: FreeBlockFile): Promise<FreeBlockFileBlockMap> {
+  const totalBlocks = await fbf.getTotalBlockCount();
+  const nodeCompressionService = new CompressionService();
+
+  const blockStatus = new Array<'FREE' | 'LIVE' | undefined>(totalBlocks);
+  const blockKind = new Array<BlockKind>(totalBlocks);
+  const freeBlockIds = new Set<number>();
+  const freeListIds: number[] = [];
+  const blobInfos: BlobInfo[] = [];
+
+  if (totalBlocks <= 1) {
+    if (totalBlocks === 1) blockKind[0] = 'header';
+    return { totalBlocks, blockStatus, blockKind, freeListIds, freeBlockIds, blobInfos, header: null, headerPresent: false };
+  }
+
+  // 1a: Walk the free list (the explicit linked list of holes)
+  let freeHead = await fbf.debug_getFreeListHead();
+  while (freeHead !== NO_BLOCK && freeHead < totalBlocks) {
+    freeBlockIds.add(freeHead);
+    freeListIds.push(freeHead);
+    blockStatus[freeHead] = 'FREE';
+    const block = await fbf.readRawBlock(freeHead);
+    freeHead = block.readUInt32LE(0);
+  }
+
+  // 1b: Parse header JSON from block 0
+  const headerBuf = await fbf.readHeader();
+  if (headerBuf.length === 0) {
+    blockKind[0] = 'header';
+    for (const id of freeListIds) blockKind[id] = 'free';
+    return { totalBlocks, blockStatus, blockKind, freeListIds, freeBlockIds, blobInfos, header: null, headerPresent: false };
+  }
+
+  let headerJsonBuf = headerBuf;
+  const headerCompressed = deserializeCompressionEnvelope(headerBuf, HEADER_COMPRESSED_PAYLOAD_MAGIC);
+  if (headerCompressed !== null) {
+    const headerCompressionService = new CompressionService();
+    headerJsonBuf = headerCompressionService.decompress(headerCompressed);
+  }
+
+  const header = JSON.parse(headerJsonBuf.toString()) as DatabaseHeader;
+
+  async function readBlobChain(startBlockId: number): Promise<number[]> {
+    const chain: number[] = [startBlockId];
+    let cur = startBlockId;
+    for (;;) {
+      const block = await fbf.readRawBlock(cur);
+      const next = block.readUInt32LE(0);
+      if (next === NO_BLOCK) break;
+      chain.push(next);
+      cur = next;
+    }
+    return chain;
+  }
+
+  async function markDocumentBlob(startBlockId: number): Promise<void> {
+    if (startBlockId === NO_BLOCK || startBlockId >= totalBlocks) return;
+    if (blockStatus[startBlockId] === 'LIVE') return;
+    const chain = await readBlobChain(startBlockId);
+    for (const blockId of chain) blockStatus[blockId] = 'LIVE';
+    blobInfos.push({ startBlockId, chain, kind: 'document', treeKind: TreeKind.COLLECTION });
+  }
+
+  function readBlobDataFromParts(parts: Buffer[]): Buffer {
+    const full = Buffer.concat(parts);
+    if (full.length < LENGTH_PREFIX_SIZE) return Buffer.alloc(0);
+    const len = Number(full.readBigUInt64LE(0));
+    return Buffer.from(full.slice(LENGTH_PREFIX_SIZE, LENGTH_PREFIX_SIZE + len));
+  }
+
+  async function walkTree(rootBlockId: number, treeKind: TreeKind): Promise<void> {
+    if (rootBlockId === NO_BLOCK || rootBlockId >= totalBlocks) return;
+    if (blockStatus[rootBlockId] === 'LIVE') return;
+
+    const chain = await readBlobChain(rootBlockId);
+    for (const blockId of chain) blockStatus[blockId] = 'LIVE';
+    const info: BlobInfo = { startBlockId: rootBlockId, chain, kind: 'node', treeKind };
+    blobInfos.push(info);
+
+    const parts: Buffer[] = [];
+    for (const blockId of chain) {
+      const block = await fbf.readRawBlock(blockId);
+      parts.push(Buffer.from(block.slice(NEXT_POINTER_SIZE)));
+    }
+    const data = readBlobDataFromParts(parts);
+    if (data.length === 0) return;
+
+    const decodedFBC1 = fbf.decodePayload(data);
+    const nodeCompResult = deserializeCompressionEnvelope(decodedFBC1, NODE_STORAGE_COMPRESSED_PAYLOAD_MAGIC);
+    const jsonBuf = nodeCompResult !== null ? nodeCompressionService.decompress(nodeCompResult) : decodedFBC1;
+
+    const node = JSON.parse(jsonBuf.toString('utf-8')) as {
+      type: string;
+      childBlockIds?: number[];
+      values?: Array<{ t?: string; value?: unknown }>;
+    };
+    info.nodeJson = node; // captured for read-only inspection (ignored by shrink)
+
+    if (node.type === 'internal' && Array.isArray(node.childBlockIds)) {
+      for (const childId of node.childBlockIds) {
+        if (typeof childId === 'number' && childId !== NO_BLOCK) await walkTree(childId, treeKind);
+      }
+    } else if (node.type === 'leaf') {
+      if (treeKind === TreeKind.CATALOG) {
+        if (Array.isArray(node.values)) {
+          for (const val of node.values) {
+            const blockId =
+              val && typeof val === 'object' && val.t === 'number' && typeof val.value === 'number'
+                ? val.value
+                : undefined;
+            if (typeof blockId === 'number' && blockId !== NO_BLOCK) await walkTree(blockId, TreeKind.COLLECTION);
+          }
+        }
+      } else if (Array.isArray(node.values)) {
+        for (const val of node.values) {
+          const blockId =
+            val && typeof val === 'object' && val.t === 'number' && typeof val.value === 'number'
+              ? val.value
+              : undefined;
+          if (typeof blockId === 'number' && blockId !== NO_BLOCK) await markDocumentBlob(blockId);
+        }
+      }
+    }
+  }
+
+  await walkTree(header.catalogRootBlockId, TreeKind.CATALOG);
+  for (const collMeta of Object.values(header.collections)) {
+    for (const indexRootBlockId of Object.values(collMeta.indexes)) {
+      if (typeof indexRootBlockId === 'number' && indexRootBlockId !== NO_BLOCK) {
+        await walkTree(indexRootBlockId, TreeKind.INDEX);
+      }
+    }
+  }
+
+  // Any unvisited block is an orphan → shrink treats it as reclaimable.
+  const orphanIds: number[] = [];
+  for (let i = 1; i < totalBlocks; i++) {
+    if (blockStatus[i] === undefined) {
+      freeBlockIds.add(i);
+      blockStatus[i] = 'FREE';
+      orphanIds.push(i);
+    }
+  }
+
+  // Compute human-readable kinds (header → live blobs → free list → orphans).
+  blockKind[0] = 'header';
+  const treeKindLabel: Record<TreeKind, BlockKind> = {
+    [TreeKind.CATALOG]: 'catalog',
+    [TreeKind.COLLECTION]: 'collection',
+    [TreeKind.INDEX]: 'index',
+  };
+  for (const info of blobInfos) {
+    const label: BlockKind = info.kind === 'document' ? 'document' : treeKindLabel[info.treeKind];
+    for (const blockId of info.chain) blockKind[blockId] = label;
+  }
+  for (const id of freeListIds) blockKind[id] = 'free';
+  for (const id of orphanIds) blockKind[id] = 'orphan';
+
+  return { totalBlocks, blockStatus, blockKind, freeListIds, freeBlockIds, blobInfos, header, headerPresent: true };
+}
+
+/** Decoded contents of one live B+ tree node block, for inspection tooling. */
+export interface DecodedNodeBlock {
+  /** Block ids the node's blob spans (usually one). */
+  chain: number[];
+  /** 'catalog' | 'primary index' | 'secondary index'. */
+  tree: string;
+  /** Indexed field name, for secondary-index nodes. */
+  field?: string;
+  /** 'leaf' | 'internal'. */
+  nodeType: string;
+  /** Decoded keys (docIds, field values, or collection names). */
+  keys: unknown[];
+  /** Decoded values, leaf nodes only (heap block ids / collection roots). */
+  values?: unknown[];
+  /** Child block ids, internal nodes only. */
+  childBlockIds?: number[];
+  nextLeafBlockId?: number;
+  prevLeafBlockId?: number;
+}
+
+/**
+ * Read-only decode of every live B+ tree node in the index file, keyed by the
+ * block where the node's blob starts. Unlike {@link buildBlockMap}, this walks
+ * ONLY the real B+ trees from the header roots (catalog → each collection's
+ * primary index → its secondary indexes) and never interprets leaf values as
+ * in-file document blobs. That makes it the accurate source for "what is stored
+ * in this block" — including nodes that shrink's relocation walk would otherwise
+ * mis-tag as document blobs in separate-heap setups.
+ *
+ * Purely read-only; stages no writes.
+ *
+ * @param {FreeBlockFile} fbf - The open FreeBlockFile to inspect.
+ * @returns {Promise<Map<number, DecodedNodeBlock>>} Decoded node per starting block id.
+ */
+export async function inspectIndexContents(fbf: FreeBlockFile): Promise<Map<number, DecodedNodeBlock>> {
+  const out = new Map<number, DecodedNodeBlock>();
+  const totalBlocks = await fbf.getTotalBlockCount();
+  if (totalBlocks <= 1) return out;
+
+  const headerBuf = await fbf.readHeader();
+  if (headerBuf.length === 0) return out;
+  let headerJsonBuf = headerBuf;
+  const headerCompressed = deserializeCompressionEnvelope(headerBuf, HEADER_COMPRESSED_PAYLOAD_MAGIC);
+  if (headerCompressed !== null) {
+    headerJsonBuf = new CompressionService().decompress(headerCompressed);
+  }
+  const header = JSON.parse(headerJsonBuf.toString()) as DatabaseHeader;
+  const svc = new CompressionService();
+  const visited = new Set<number>();
+
+  const decKey = (k: unknown): unknown =>
+    k && typeof k === 'object' && 'value' in (k as Record<string, unknown>) ? (k as { value: unknown }).value : k;
+  const decVal = (v: unknown): unknown => {
+    if (!v || typeof v !== 'object') return v;
+    const o = v as { t?: string; value?: unknown };
+    if (o.t === 'json' && typeof o.value === 'string') {
+      try {
+        return JSON.parse(o.value);
+      } catch {
+        return o.value;
+      }
+    }
+    return 'value' in o ? o.value : v;
+  };
+
+  async function readChain(startBlockId: number): Promise<number[]> {
+    const chain = [startBlockId];
+    let cur = startBlockId;
+    while (chain.length <= totalBlocks) {
+      const block = await fbf.readRawBlock(cur);
+      const next = block.readUInt32LE(0);
+      if (next === NO_BLOCK || next >= totalBlocks) break;
+      chain.push(next);
+      cur = next;
+    }
+    return chain;
+  }
+
+  async function walk(rootBlockId: number, tree: string, field?: string): Promise<void> {
+    if (rootBlockId === NO_BLOCK || rootBlockId >= totalBlocks || visited.has(rootBlockId)) return;
+    visited.add(rootBlockId);
+
+    const chain = await readChain(rootBlockId);
+    const parts: Buffer[] = [];
+    for (const id of chain) {
+      const block = await fbf.readRawBlock(id);
+      parts.push(Buffer.from(block.slice(NEXT_POINTER_SIZE)));
+    }
+    const full = Buffer.concat(parts);
+    if (full.length < LENGTH_PREFIX_SIZE) return;
+    const len = Number(full.readBigUInt64LE(0));
+    const data = Buffer.from(full.slice(LENGTH_PREFIX_SIZE, LENGTH_PREFIX_SIZE + len));
+
+    const decodedFBC1 = fbf.decodePayload(data);
+    const nodeComp = deserializeCompressionEnvelope(decodedFBC1, NODE_STORAGE_COMPRESSED_PAYLOAD_MAGIC);
+    const jsonBuf = nodeComp !== null ? svc.decompress(nodeComp) : decodedFBC1;
+
+    let node: {
+      type?: string;
+      keys?: unknown[];
+      values?: unknown[];
+      childBlockIds?: number[];
+      nextBlockId?: number;
+      prevBlockId?: number;
+    };
+    try {
+      node = JSON.parse(jsonBuf.toString('utf-8'));
+    } catch {
+      return;
+    }
+
+    const decoded: DecodedNodeBlock = {
+      chain,
+      tree,
+      field,
+      nodeType: node.type ?? 'unknown',
+      keys: Array.isArray(node.keys) ? node.keys.map(decKey) : [],
+    };
+    if (node.type === 'leaf') {
+      decoded.values = Array.isArray(node.values) ? node.values.map(decVal) : [];
+      decoded.nextLeafBlockId = node.nextBlockId;
+      decoded.prevLeafBlockId = node.prevBlockId;
+    } else if (node.type === 'internal') {
+      decoded.childBlockIds = Array.isArray(node.childBlockIds) ? node.childBlockIds : [];
+    }
+    out.set(rootBlockId, decoded);
+
+    if (node.type === 'internal' && Array.isArray(node.childBlockIds)) {
+      for (const childId of node.childBlockIds) {
+        if (typeof childId === 'number') await walk(childId, tree, field);
+      }
+    } else if (node.type === 'leaf' && tree === 'catalog' && Array.isArray(node.values)) {
+      // Catalog leaf values are collection root block ids — recurse into each
+      // collection's primary index so its leaves are decoded too.
+      for (const val of node.values) {
+        const rootId = decVal(val);
+        if (typeof rootId === 'number' && rootId !== NO_BLOCK) await walk(rootId, 'primary index');
+      }
+    }
+  }
+
+  await walk(header.catalogRootBlockId, 'catalog');
+  for (const [, collMeta] of Object.entries(header.collections)) {
+    await walk(collMeta.rootBlockId, 'primary index');
+    for (const [field, indexRoot] of Object.entries(collMeta.indexes)) {
+      if (typeof indexRoot === 'number') await walk(indexRoot, 'secondary index', field);
+    }
+  }
+  return out;
 }
 
 /**
@@ -341,7 +701,7 @@ interface BlobInfo {
  *     lopping off any blocks the insert appended past that boundary.
  *
  * Enforce the precondition by quiescing all DB traffic before calling (the
- * manual `/db/shrink` endpoint relies on this), or by holding an
+ * manual `/db/demo/shrink` endpoint relies on this), or by holding an
  * application-level write mutex exclusively across the call (see
  * `AutoCompactionCallbacks.runExclusively`).
  *
@@ -368,27 +728,14 @@ export async function shrinkDatabase(fbf: FreeBlockFile): Promise<ShrinkResult> 
   }
 
   // ── Phase 1: Build Block Map ──────────────────────────────────────────
+  // Delegated to buildBlockMap so the read-only inspection view (used by the
+  // compaction demo) and the real relocation below always classify blocks
+  // identically: free-list holes, live B+ tree nodes, and orphaned blocks.
+  const map = await buildBlockMap(fbf);
+  const { blockStatus, freeBlockIds, blobInfos, header } = map;
 
-  // Compression service for decoding node payloads (algorithm read from envelope header)
-  const nodeCompressionService = new CompressionService();
-
-  // Track which blocks are free vs live
-  const blockStatus = new Array<'FREE' | 'LIVE' | undefined>(totalBlocks);
-  const freeBlockIds = new Set<number>();
-  const blobInfos: BlobInfo[] = [];
-
-  // 1a: Walk the free list
-  let freeHead = await fbf.debug_getFreeListHead();
-  while (freeHead !== NO_BLOCK && freeHead < totalBlocks) {
-    freeBlockIds.add(freeHead);
-    blockStatus[freeHead] = 'FREE';
-    const block = await fbf.readRawBlock(freeHead);
-    freeHead = block.readUInt32LE(0);
-  }
-
-  // 1b: Parse header JSON from block 0
-  const headerBuf = await fbf.readHeader();
-  if (headerBuf.length === 0) {
+  // Header-less file: nothing reachable to relocate.
+  if (!map.headerPresent) {
     return {
       success: true,
       blocksTotal: totalBlocks,
@@ -398,145 +745,7 @@ export async function shrinkDatabase(fbf: FreeBlockFile): Promise<ShrinkResult> 
       sizeAfter: sizeBefore,
     };
   }
-
-  // Decompress header if it was compressed by SimpleDBMS
-  let headerJsonBuf = headerBuf;
-  const headerCompressed = deserializeCompressionEnvelope(headerBuf, HEADER_COMPRESSED_PAYLOAD_MAGIC);
-  if (headerCompressed !== null) {
-    const headerCompressionService = new CompressionService();
-    headerJsonBuf = headerCompressionService.decompress(headerCompressed);
-  }
-
-  const header = JSON.parse(headerJsonBuf.toString()) as {
-    catalogRootBlockId: number;
-    collections: {
-      [name: string]: {
-        rootBlockId: number;
-        indexes: { [field: string]: number };
-      };
-    };
-  };
-
-  // Helper: follow a blob's block chain via nextPtr
-  async function readBlobChain(startBlockId: number): Promise<number[]> {
-    const chain: number[] = [startBlockId];
-    let cur = startBlockId;
-    for (;;) {
-      const block = await fbf.readRawBlock(cur);
-      const next = block.readUInt32LE(0);
-      if (next === NO_BLOCK) break;
-      chain.push(next);
-      cur = next;
-    }
-    return chain;
-  }
-
-  async function markDocumentBlob(startBlockId: number): Promise<void> {
-    if (startBlockId === NO_BLOCK || startBlockId >= totalBlocks) return;
-    if (blockStatus[startBlockId] === 'LIVE') return;
-
-    const chain = await readBlobChain(startBlockId);
-    for (const blockId of chain) {
-      blockStatus[blockId] = 'LIVE';
-    }
-    blobInfos.push({ startBlockId, chain, kind: 'document', treeKind: TreeKind.COLLECTION });
-  }
-
-  // Helper: read blob payload from a chain (strips length prefix)
-  function readBlobDataFromParts(parts: Buffer[]): Buffer {
-    const full = Buffer.concat(parts);
-    if (full.length < LENGTH_PREFIX_SIZE) return Buffer.alloc(0);
-    const len = Number(full.readBigUInt64LE(0));
-    return Buffer.from(full.slice(LENGTH_PREFIX_SIZE, LENGTH_PREFIX_SIZE + len));
-  }
-
-  // 1c: Recursively walk all B+ trees
-  async function walkTree(rootBlockId: number, treeKind: TreeKind): Promise<void> {
-    if (rootBlockId === NO_BLOCK || rootBlockId >= totalBlocks) return;
-    if (blockStatus[rootBlockId] === 'LIVE') return; // already visited
-
-    const chain = await readBlobChain(rootBlockId);
-    for (const blockId of chain) {
-      blockStatus[blockId] = 'LIVE';
-    }
-    blobInfos.push({ startBlockId: rootBlockId, chain, kind: 'node', treeKind });
-
-    // Read and parse the node JSON
-    const parts: Buffer[] = [];
-    for (const blockId of chain) {
-      const block = await fbf.readRawBlock(blockId);
-      parts.push(Buffer.from(block.slice(NEXT_POINTER_SIZE)));
-    }
-    const data = readBlobDataFromParts(parts);
-    if (data.length === 0) return;
-
-    // Decode FBC1 wrapper (applied by FreeBlockFile.encodePayload), then ZST1 wrapper (applied by FBNodeStorage)
-    const decodedFBC1 = fbf.decodePayload(data);
-    const nodeCompResult = deserializeCompressionEnvelope(decodedFBC1, NODE_STORAGE_COMPRESSED_PAYLOAD_MAGIC);
-    const jsonBuf = nodeCompResult !== null ? nodeCompressionService.decompress(nodeCompResult) : decodedFBC1;
-
-    const node = JSON.parse(jsonBuf.toString('utf-8')) as {
-      type: string;
-      childBlockIds?: number[];
-      values?: Array<{ t?: string; value?: unknown }>;
-      nextBlockId?: number;
-      prevBlockId?: number;
-    };
-
-    if (node.type === 'internal' && Array.isArray(node.childBlockIds)) {
-      for (const childId of node.childBlockIds) {
-        if (typeof childId === 'number' && childId !== NO_BLOCK) {
-          await walkTree(childId, treeKind);
-        }
-      }
-    } else if (node.type === 'leaf') {
-      if (treeKind === TreeKind.CATALOG) {
-        // Catalog leaf values are collection root block IDs
-        if (Array.isArray(node.values)) {
-          for (const val of node.values) {
-            const blockId =
-              val && typeof val === 'object' && val.t === 'number' && typeof val.value === 'number'
-                ? val.value
-                : undefined;
-            if (typeof blockId === 'number' && blockId !== NO_BLOCK) {
-              await walkTree(blockId, TreeKind.COLLECTION);
-            }
-          }
-        }
-      } else if (Array.isArray(node.values)) {
-        // Collection and secondary-index leaf values are document blob start IDs.
-        for (const val of node.values) {
-          const blockId =
-            val && typeof val === 'object' && val.t === 'number' && typeof val.value === 'number'
-              ? val.value
-              : undefined;
-          if (typeof blockId === 'number' && blockId !== NO_BLOCK) {
-            await markDocumentBlob(blockId);
-          }
-        }
-      }
-    }
-  }
-
-  // Walk catalog tree
-  await walkTree(header.catalogRootBlockId, TreeKind.CATALOG);
-
-  // Walk index trees (referenced from header, not from catalog tree)
-  for (const collMeta of Object.values(header.collections)) {
-    for (const indexRootBlockId of Object.values(collMeta.indexes)) {
-      if (typeof indexRootBlockId === 'number' && indexRootBlockId !== NO_BLOCK) {
-        await walkTree(indexRootBlockId, TreeKind.INDEX);
-      }
-    }
-  }
-
-  // Any unvisited block is an orphan → treat as free
-  for (let i = 1; i < totalBlocks; i++) {
-    if (blockStatus[i] === undefined) {
-      freeBlockIds.add(i);
-      blockStatus[i] = 'FREE';
-    }
-  }
+  assert(header !== null); // headerPresent === true guarantees a parsed header
 
   const blocksFree = freeBlockIds.size;
   if (blocksFree === 0) {
@@ -548,6 +757,15 @@ export async function shrinkDatabase(fbf: FreeBlockFile): Promise<ShrinkResult> 
       sizeBefore,
       sizeAfter: sizeBefore,
     };
+  }
+
+  // Reused below in Phase 3 to decode node payloads when rewriting block IDs.
+  const nodeCompressionService = new CompressionService();
+  function readBlobDataFromParts(parts: Buffer[]): Buffer {
+    const full = Buffer.concat(parts);
+    if (full.length < LENGTH_PREFIX_SIZE) return Buffer.alloc(0);
+    const len = Number(full.readBigUInt64LE(0));
+    return Buffer.from(full.slice(LENGTH_PREFIX_SIZE, LENGTH_PREFIX_SIZE + len));
   }
 
   // ── Phase 2: Build Relocation Table ───────────────────────────────────

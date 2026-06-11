@@ -3,1126 +3,618 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>SimpleDBMS — Compaction Demo</title>
+<title>SimpleDBMS — shrinkDatabase Demo</title>
 <style>
-/* ── reset & root ──────────────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
-  --bg:        #0d1117;
-  --surface:   #161b22;
-  --surface2:  #1e2530;
-  --border:    #30363d;
-  --text:      #c9d1d9;
-  --text-muted:#768390;
-  --primary:   #58a6ff;
-  --success:   #3fb950;
-  --warning:   #d29922;
-  --danger:    #f85149;
-  --purple:    #bc8cff;
-  --radius:    8px;
-  font-family: 'Segoe UI', system-ui, sans-serif;
-  font-size: 14px;
+  --bg:#0d1117; --surface:#161b22; --surface2:#1e2530; --border:#30363d;
+  --text:#c9d1d9; --muted:#768390;
+  --header:#58a6ff; --catalog:#bc8cff; --primary-idx:#3fb950; --secondary-idx:#2dd4bf;
+  --live:#f59e0b; --free:#6e7681; --orphan:#f85149;
+  --radius:8px;
+  font-family:'Segoe UI',system-ui,sans-serif; font-size:14px;
 }
-body { background: var(--bg); color: var(--text); min-height: 100vh;
-       display: flex; flex-direction: column; }
+body { background:var(--bg); color:var(--text); min-height:100vh; display:flex; flex-direction:column; }
 
-/* ── layout ────────────────────────────────────────────── */
-header {
-  padding: 16px 24px;
-  background: var(--surface);
-  border-bottom: 1px solid var(--border);
-  display: flex; align-items: center; gap: 16px;
-}
-header h1 { font-size: 18px; font-weight: 700; color: var(--primary); letter-spacing: .5px; }
-header p  { color: var(--text-muted); font-size: 13px; }
+header { padding:14px 22px; background:var(--surface); border-bottom:1px solid var(--border);
+         display:flex; align-items:center; gap:16px; }
+header h1 { font-size:17px; font-weight:700; color:var(--header); }
+header p { color:var(--muted); font-size:12px; }
+.status { margin-left:auto; display:flex; gap:8px; align-items:center; font-size:12px; color:var(--muted); }
+.dot { width:8px; height:8px; border-radius:50%; background:var(--document); }
 
-.layout {
-  display: grid;
-  grid-template-columns: 1fr 300px;
-  grid-template-rows: 1fr auto;
-  gap: 0;
-  flex: 1;
-  overflow: hidden;
-}
-.heap-panel  {
-  grid-column: 1; grid-row: 1;
-  padding: 20px;
-  overflow-y: auto;
-  display: flex; flex-direction: column; gap: 16px;
-}
-.sidebar {
-  grid-column: 2; grid-row: 1 / 3;
-  background: var(--surface);
-  border-left: 1px solid var(--border);
-  overflow-y: auto;
-  padding: 16px;
-  display: flex; flex-direction: column; gap: 12px;
-}
-.log-panel {
-  grid-column: 1; grid-row: 2;
-  border-top: 1px solid var(--border);
-  background: var(--surface);
-  padding: 12px 20px;
-  max-height: 180px;
-  overflow-y: auto;
-}
+.layout { display:grid; grid-template-columns:1fr 320px; grid-template-rows:1fr auto; flex:1; overflow:hidden; }
+.main { grid-column:1; grid-row:1; padding:18px; overflow-y:auto; display:flex; flex-direction:column; gap:16px; }
+.sidebar { grid-column:2; grid-row:1/3; background:var(--surface); border-left:1px solid var(--border);
+           overflow-y:auto; padding:16px; display:flex; flex-direction:column; gap:16px; }
+.log-panel { grid-column:1; grid-row:2; border-top:1px solid var(--border); background:var(--surface);
+             padding:10px 18px; max-height:170px; overflow-y:auto; }
 
-/* ── card ──────────────────────────────────────────────── */
-.card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 16px;
-}
-.card-title {
-  font-size: 11px; font-weight: 700; letter-spacing: .8px;
-  text-transform: uppercase; color: var(--text-muted);
-  margin-bottom: 12px;
-}
+.card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:16px; }
+.card-title { font-size:11px; font-weight:700; letter-spacing:.7px; text-transform:uppercase;
+              color:var(--muted); margin-bottom:12px; }
 
-/* ── stats row ──────────────────────────────────────────── */
-.stats-row {
-  display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px;
-}
-.stat-box {
-  background: var(--surface2); border: 1px solid var(--border);
-  border-radius: 6px; padding: 10px 8px; text-align: center;
-}
-.stat-label  { font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .5px; }
-.stat-value  { font-size: 20px; font-weight: 700; margin-top: 2px; }
-.stat-sub    { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+/* stats */
+.stats { display:grid; grid-template-columns:repeat(5,1fr); gap:8px; }
+.stat { background:var(--surface2); border:1px solid var(--border); border-radius:6px; padding:9px 8px; text-align:center; }
+.stat .label { font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:.4px; }
+.stat .value { font-size:19px; font-weight:700; margin-top:2px; }
+.stat .sub { font-size:10px; color:var(--muted); margin-top:1px; }
 
-/* fragmentation meter */
-.frag-meter-wrap { display: flex; flex-direction: column; gap: 4px; }
-.frag-meter-bar  { height: 6px; background: var(--surface2); border-radius: 3px; overflow: hidden; }
-.frag-meter-fill {
-  height: 100%; border-radius: 3px;
-  transition: width .5s ease, background-color .5s ease;
-}
+.frag-wrap { margin-top:12px; }
+.frag-row { display:flex; justify-content:space-between; font-size:11px; color:var(--muted); margin-bottom:4px; }
+.frag-bar { height:6px; background:var(--surface2); border-radius:3px; overflow:hidden; }
+.frag-fill { height:100%; border-radius:3px; transition:width .4s ease, background-color .4s ease; }
 
-/* ── block grid ─────────────────────────────────────────── */
-.block-grid-wrap { position: relative; }
-.block-grid {
-  display: flex; flex-wrap: wrap; gap: 5px;
-  padding: 4px;
-}
-.block {
-  width: 52px; height: 52px;
-  border-radius: 8px;
-  display: flex; flex-direction: column; align-items: center; justify-content: center;
-  cursor: pointer;
-  position: relative;
-  border: 2px solid transparent;
-  transition: transform .15s ease, box-shadow .15s ease, opacity .3s ease, border-color .15s ease;
-  user-select: none;
-  font-weight: 700;
-}
-.block:hover { transform: scale(1.12); z-index: 10; }
-.block.selected { border-color: #fff !important; box-shadow: 0 0 0 2px rgba(255,255,255,.4); }
-.block-id   { font-size: 9px; opacity: .7; line-height: 1; }
-.block-label{ font-size: 13px; line-height: 1; }
+/* block grid */
+.grid { display:flex; flex-wrap:wrap; gap:5px; padding:2px; }
+.block { width:54px; height:54px; border-radius:8px; display:flex; flex-direction:column;
+         align-items:center; justify-content:center; cursor:default; position:relative;
+         border:2px solid transparent; font-weight:700; color:#0d1117;
+         transition:transform .15s ease, box-shadow .15s ease, opacity .3s ease; user-select:none; }
+.block:hover { transform:scale(1.1); z-index:5; box-shadow:0 4px 14px rgba(0,0,0,.5); }
+.block .bid { font-size:9px; opacity:.65; line-height:1; }
+.block .blabel { font-size:11px; line-height:1.1; margin-top:2px; }
+.b-header    { background:var(--header); }
+.b-catalog   { background:var(--catalog); }
+.b-collection{ background:var(--primary-idx); }
+.b-index     { background:var(--secondary-idx); }
+.b-live      { background:var(--live); }
+.b-free      { background:transparent; color:var(--free); border:2px dashed var(--free) !important; }
+.b-orphan    { background:transparent; color:var(--orphan); border:2px dashed var(--orphan) !important; }
+.block.sel { box-shadow:0 0 0 3px #fff, 0 4px 14px rgba(0,0,0,.5); transform:scale(1.06); }
+@keyframes popIn { 0%{transform:scale(0);opacity:0;} 70%{transform:scale(1.12);} 100%{transform:scale(1);opacity:1;} }
+.b-enter { animation:popIn .3s ease forwards; }
 
-/* block types */
-.block-header { background: #1e3a5f; color: #58a6ff; }
-.block-free   {
-  background: #1e2530;
-  color: var(--text-muted);
-  border: 2px dashed #30363d !important;
-}
-.block-other  { background: #2a1d4a; color: #bc8cff; }
+/* block content panel */
+.bc-meta { display:flex; flex-wrap:wrap; gap:6px 18px; margin-bottom:10px; }
+.bc-meta div { font-size:12px; } .bc-meta .k { color:var(--muted); margin-right:5px; }
+.bc-kv { width:100%; border-collapse:collapse; font-size:12px; font-family:monospace; }
+.bc-kv th { text-align:left; color:var(--muted); font-weight:600; padding:4px 8px; border-bottom:1px solid var(--border); font-family:'Segoe UI',sans-serif; font-size:11px; text-transform:uppercase; letter-spacing:.5px; }
+.bc-kv td { padding:4px 8px; border-bottom:1px solid #1a1f27; vertical-align:top; word-break:break-all; }
+.bc-kv td.v { color:var(--secondary-idx); }
+.bc-pill { display:inline-block; background:var(--surface2); border:1px solid var(--border); border-radius:4px; padding:1px 7px; font-family:monospace; font-size:12px; margin:2px 3px 2px 0; }
+.bc-note { font-size:12px; color:var(--muted); line-height:1.5; }
 
-/* pop-in animation */
-@keyframes popIn {
-  0%   { transform: scale(0); opacity: 0; }
-  70%  { transform: scale(1.15); }
-  100% { transform: scale(1);   opacity: 1; }
-}
-.block-enter { animation: popIn .35s ease forwards; }
+.legend { display:flex; flex-wrap:wrap; gap:10px; }
+.legend span { font-size:11px; color:var(--muted); display:flex; align-items:center; gap:4px; }
+.legend i { width:11px; height:11px; border-radius:2px; display:inline-block; }
 
-/* fade-out to free */
-@keyframes fadeToFree {
-  0%   { opacity: 1; }
-  100% { opacity: .4; }
-}
-.block-freeing { animation: fadeToFree .4s ease forwards; }
+/* free list chain */
+.chain { display:flex; align-items:center; flex-wrap:wrap; gap:6px; font-family:monospace; font-size:13px; padding:4px 0; }
+.chain .node { background:var(--surface2); border:1px solid var(--border); border-radius:4px; padding:3px 9px; }
+.chain .arrow { color:var(--border); }
+.chain .null { color:var(--orphan); font-weight:700; }
 
-/* ── free-list viz ──────────────────────────────────────── */
-.freelist-chain {
-  display: flex; align-items: center; flex-wrap: wrap; gap: 6px;
-  padding: 8px 0;
-  font-family: monospace; font-size: 13px;
-}
-.chain-node {
-  background: var(--surface2); border: 1px solid var(--border);
-  border-radius: 4px; padding: 3px 8px;
-  color: var(--text-muted);
-}
-.chain-arrow { color: var(--border); }
-.chain-null  { color: var(--danger); font-weight: 700; }
+/* sidebar controls */
+.s-title { font-size:10px; font-weight:700; letter-spacing:.7px; text-transform:uppercase;
+           color:var(--muted); padding-bottom:6px; border-bottom:1px solid var(--border); }
+.field { display:flex; gap:6px; margin-top:8px; }
+input[type=text],input[type=number] { flex:1; background:var(--surface2); border:1px solid var(--border);
+  border-radius:5px; padding:7px 9px; color:var(--text); font-size:13px; outline:none; min-width:0; }
+input:focus { border-color:var(--header); }
+.label-sm { font-size:11px; color:var(--muted); }
 
-/* ── tooltip ────────────────────────────────────────────── */
-.tooltip {
-  position: fixed; z-index: 1000;
-  background: #0d1117; border: 1px solid var(--border);
-  border-radius: 8px; padding: 10px 12px;
-  max-width: 240px; pointer-events: none;
-  font-size: 12px; line-height: 1.5;
-  box-shadow: 0 8px 24px rgba(0,0,0,.6);
-  transition: opacity .1s ease;
-}
-.tooltip-title { font-weight: 700; font-size: 13px; margin-bottom: 4px; }
-.tooltip-row   { display: flex; gap: 8px; }
-.tooltip-key   { color: var(--text-muted); min-width: 64px; }
-.tooltip-val   { color: var(--text); font-family: monospace; }
+button { width:100%; padding:9px; border:none; border-radius:6px; font-size:13px; font-weight:600;
+         cursor:pointer; transition:opacity .15s, transform .1s; margin-top:10px; }
+button:hover { opacity:.88; } button:active { transform:scale(.98); }
+button:disabled { opacity:.4; cursor:not-allowed; }
+.btn-primary { background:var(--header); color:#0d1117; }
+.btn-shrink  { background:var(--orphan); color:#fff; }
+.btn-mini    { width:auto; margin:0; padding:4px 9px; font-size:11px; background:var(--surface2);
+               color:var(--orphan); border:1px solid var(--border); }
 
-/* ── sidebar controls ───────────────────────────────────── */
-.sidebar-section { display: flex; flex-direction: column; gap: 8px; }
-.sidebar-title {
-  font-size: 10px; font-weight: 700; letter-spacing: .8px;
-  text-transform: uppercase; color: var(--text-muted);
-  padding-bottom: 6px;
-  border-bottom: 1px solid var(--border);
-}
-.field-row { display: flex; gap: 6px; }
-input[type=text], input[type=number], select {
-  flex: 1; background: var(--surface2); border: 1px solid var(--border);
-  border-radius: 5px; padding: 6px 9px; color: var(--text); font-size: 13px;
-  outline: none;
-}
-input:focus { border-color: var(--primary); }
+/* documents list */
+.docs { display:flex; flex-direction:column; gap:6px; margin-top:8px; }
+.doc { background:var(--surface2); border:1px solid var(--border); border-radius:6px; padding:8px 10px;
+       display:flex; align-items:center; gap:8px; }
+.doc .info { flex:1; min-width:0; }
+.doc .name { font-size:13px; font-weight:600; }
+.doc .meta { font-size:11px; color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.doc .id { font-family:monospace; font-size:9px; color:var(--muted); }
+.empty { color:var(--muted); font-size:12px; padding:6px 0; }
 
-/* preset chips */
-.preset-chips { display: flex; flex-wrap: wrap; gap: 5px; }
-.chip {
-  background: var(--surface2); border: 1px solid var(--border);
-  border-radius: 20px; padding: 3px 10px; font-size: 11px;
-  cursor: pointer; transition: background .15s;
-}
-.chip:hover { background: var(--border); }
-.chip.active { background: var(--primary); color: #000; border-color: var(--primary); }
+/* log */
+.log-title { font-size:10px; font-weight:700; letter-spacing:.7px; text-transform:uppercase; color:var(--muted); margin-bottom:8px; }
+.log-entry { display:flex; gap:10px; font-size:12px; line-height:1.45; padding:2px 0; border-bottom:1px solid #1a1f27; }
+.log-time { color:var(--muted); font-family:monospace; font-size:11px; flex-shrink:0; }
+.log-msg .hl { font-weight:700; color:var(--text); }
 
-button {
-  width: 100%; padding: 8px; border: none; border-radius: 6px;
-  font-size: 13px; font-weight: 600; cursor: pointer;
-  transition: opacity .15s, transform .1s;
-}
-button:hover   { opacity: .85; }
-button:active  { transform: scale(.97); }
-button:disabled{ opacity: .4; cursor: not-allowed; }
+/* tooltip */
+.tooltip { position:fixed; z-index:1000; background:#0d1117; border:1px solid var(--border);
+  border-radius:8px; padding:9px 11px; max-width:240px; pointer-events:none; font-size:12px;
+  line-height:1.5; box-shadow:0 8px 24px rgba(0,0,0,.6); opacity:0; transition:opacity .1s; }
+.tooltip .tt-title { font-weight:700; margin-bottom:3px; }
+.tooltip .tt-row { display:flex; gap:8px; } .tooltip .tt-k { color:var(--muted); min-width:54px; }
 
-.btn-primary { background: var(--primary); color: #0d1117; }
-.btn-danger  { background: var(--danger);  color: #fff; }
-.btn-success { background: var(--success); color: #0d1117; }
-.btn-warning { background: var(--warning); color: #0d1117; }
-.btn-neutral { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
-.btn-purple  { background: var(--purple); color: #0d1117; }
-
-/* selected document panel */
-.selected-panel {
-  background: var(--surface2); border: 1px solid var(--border);
-  border-radius: 6px; padding: 10px;
-  font-size: 12px; line-height: 1.6;
-}
-.selected-panel .doc-id   { font-family: monospace; font-size: 10px; color: var(--text-muted); word-break: break-all; }
-.selected-panel .doc-name { font-size: 15px; font-weight: 700; margin-bottom: 4px; }
-.selected-panel .doc-field{ display: flex; gap: 8px; }
-.selected-panel .fkey     { color: var(--text-muted); }
-
-/* ── activity log ───────────────────────────────────────── */
-.log-title { font-size: 10px; font-weight: 700; letter-spacing: .8px;
-             text-transform: uppercase; color: var(--text-muted); margin-bottom: 8px; }
-.log-entries { display: flex; flex-direction: column; gap: 3px; }
-.log-entry {
-  display: flex; align-items: baseline; gap: 10px;
-  font-size: 12px; line-height: 1.4; padding: 2px 0;
-  border-bottom: 1px solid #1a1f27;
-}
-.log-time    { color: var(--text-muted); font-family: monospace; font-size: 11px; flex-shrink: 0; }
-.log-icon    { flex-shrink: 0; }
-.log-msg     { color: var(--text); }
-.log-msg .highlight { font-weight: 700; }
-
-/* narrator overlay */
-.narrator {
-  position: fixed; bottom: 220px; left: 50%; transform: translateX(-50%);
-  background: rgba(13,17,23,.95); border: 1px solid var(--primary);
-  border-radius: 10px; padding: 14px 22px;
-  font-size: 15px; font-weight: 500; color: var(--text);
-  max-width: 600px; text-align: center; z-index: 500;
-  box-shadow: 0 0 40px rgba(88,166,255,.2);
-  transition: opacity .4s ease;
-}
-
-/* compact result banner */
-.result-banner {
-  position: fixed; top: 70px; right: 24px;
-  background: var(--surface); border: 1px solid var(--success);
-  border-radius: 10px; padding: 14px 18px;
-  font-size: 13px; z-index: 500;
-  box-shadow: 0 4px 20px rgba(0,0,0,.4);
-}
-.result-banner .big { font-size: 22px; font-weight: 700; color: var(--success); }
-
-/* progress spinner */
-.spinner { display: inline-block; width: 14px; height: 14px;
-           border: 2px solid var(--border); border-top-color: var(--primary);
-           border-radius: 50%; animation: spin .7s linear infinite; }
-@keyframes spin { to { transform: rotate(360deg); } }
-
-/* tech details accordion */
-.details-toggle {
-  cursor: pointer; display: flex; align-items: center; gap: 8px;
-  font-size: 11px; font-weight: 700; text-transform: uppercase;
-  letter-spacing: .7px; color: var(--text-muted);
-  padding: 8px 0;
-}
-.details-toggle:hover { color: var(--text); }
-.details-body { display: none; margin-top: 6px; }
-.details-body.open { display: block; }
-.details-body pre {
-  background: var(--surface2); border: 1px solid var(--border);
-  border-radius: 6px; padding: 10px; overflow-x: auto;
-  font-size: 11px; line-height: 1.5; color: var(--text-muted);
-  max-height: 200px;
-}
-
-/* demo script modal */
-.demo-modal-backdrop {
-  position: fixed; inset: 0; background: rgba(0,0,0,.7);
-  display: flex; align-items: center; justify-content: center;
-  z-index: 900; transition: opacity .3s;
-}
-.demo-modal {
-  background: var(--surface); border: 1px solid var(--border);
-  border-radius: 12px; padding: 28px; max-width: 460px; width: 100%;
-  text-align: center;
-}
-.demo-modal h2 { font-size: 20px; margin-bottom: 8px; color: var(--primary); }
-.demo-modal p  { color: var(--text-muted); margin-bottom: 20px; line-height: 1.6; }
-.demo-modal-btns { display: flex; gap: 10px; }
+/* details */
+.details summary { cursor:pointer; font-size:11px; font-weight:700; text-transform:uppercase;
+  letter-spacing:.6px; color:var(--muted); }
+.details pre { background:var(--surface2); border:1px solid var(--border); border-radius:6px; padding:10px;
+  overflow:auto; font-size:11px; line-height:1.5; color:var(--muted); max-height:220px; margin-top:8px; }
+.spinner { display:inline-block; width:13px; height:13px; border:2px solid rgba(255,255,255,.3);
+  border-top-color:#fff; border-radius:50%; animation:spin .7s linear infinite; vertical-align:-2px; }
+@keyframes spin { to { transform:rotate(360deg); } }
 </style>
 </head>
 <body>
 
 <header>
   <div>
-    <h1>⚡ SimpleDBMS — Compaction Demo</h1>
-    <p>Visualise how the document heap grows, fragments, and compacts</p>
+    <h1>⚡ SimpleDBMS — shrinkDatabase</h1>
+    <p>Live view of the B+ tree index file that <code>shrinkDatabase()</code> compacts in place</p>
   </div>
-  <div style="margin-left:auto;display:flex;gap:8px;align-items:center;">
-    <span id="status-dot" style="width:8px;height:8px;border-radius:50%;background:#d29922;"></span>
-    <span id="status-text" style="font-size:12px;color:var(--text-muted)">Connecting…</span>
+  <div class="status">
+    <span class="dot" id="dot"></span>
+    <span id="status-text">Connecting…</span>
   </div>
 </header>
 
 <div class="layout">
+  <div class="main">
 
-  <!-- ── HEAP VISUALIZATION ────────────────────────────── -->
-  <div class="heap-panel">
-
-    <!-- stats row -->
+    <!-- stats -->
     <div class="card">
-      <div class="card-title">Heap File Statistics</div>
-      <div class="stats-row">
-        <div class="stat-box">
-          <div class="stat-label">Blocks</div>
-          <div class="stat-value" id="stat-total">—</div>
-          <div class="stat-sub" id="stat-size">— B</div>
-        </div>
-        <div class="stat-box">
-          <div class="stat-label">Live</div>
-          <div class="stat-value" style="color:var(--success)" id="stat-live">—</div>
-          <div class="stat-sub" id="stat-docs">— docs</div>
-        </div>
-        <div class="stat-box">
-          <div class="stat-label">Free (holes)</div>
-          <div class="stat-value" style="color:var(--danger)" id="stat-free">—</div>
-          <div class="stat-sub" id="stat-free-bytes">— wasted</div>
-        </div>
-        <div class="stat-box">
-          <div class="stat-label">Other</div>
-          <div class="stat-value" style="color:var(--purple)" id="stat-other">—</div>
-          <div class="stat-sub">index / system</div>
-        </div>
-        <div class="stat-box">
-          <div class="stat-label">Fragmentation</div>
-          <div class="stat-value" id="stat-frag">—</div>
-          <div class="stat-sub">of usable space</div>
-        </div>
+      <div class="card-title">Index File — <code id="coll-name">_demo</code> (FreeBlockFile that shrink operates on)</div>
+      <div class="stats">
+        <div class="stat"><div class="label">Blocks</div><div class="value" id="s-total">—</div><div class="sub" id="s-size">— B</div></div>
+        <div class="stat"><div class="label">Live</div><div class="value" style="color:var(--primary-idx)" id="s-live">—</div><div class="sub">in use</div></div>
+        <div class="stat"><div class="label">Free holes</div><div class="value" style="color:var(--free)" id="s-free">—</div><div class="sub">free list</div></div>
+        <div class="stat"><div class="label">Orphans</div><div class="value" style="color:var(--orphan)" id="s-orphan">—</div><div class="sub">abandoned</div></div>
+        <div class="stat"><div class="label">Reclaimable</div><div class="value" id="s-frag">—</div><div class="sub">of usable</div></div>
       </div>
-      <div style="margin-top:12px;" class="frag-meter-wrap">
-        <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text-muted);margin-bottom:4px;">
-          <span>0%</span>
-          <span id="frag-label">Fragmentation</span>
-          <span>100%</span>
-        </div>
-        <div class="frag-meter-bar">
-          <div class="frag-meter-fill" id="frag-fill" style="width:0%;background:var(--success)"></div>
-        </div>
+      <div class="frag-wrap">
+        <div class="frag-row"><span>0%</span><span id="frag-label">Reclaimable space</span><span>100%</span></div>
+        <div class="frag-bar"><div class="frag-fill" id="frag-fill" style="width:0%;background:var(--primary-idx)"></div></div>
+      </div>
+      <div class="label-sm" style="margin-top:10px;border-top:1px solid var(--border);padding-top:8px;">
+        Separate <strong>heap file</strong> (document blobs — what shrink does <em>not</em> touch):
+        <span id="heap-summary" style="color:var(--text);">—</span>
       </div>
     </div>
 
     <!-- block grid -->
     <div class="card">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
-        <div class="card-title" style="margin-bottom:0">Document Heap Blocks</div>
-        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-          <span style="font-size:11px;color:var(--text-muted)">
-            <span style="display:inline-block;width:10px;height:10px;background:#1e3a5f;border-radius:2px;margin-right:3px;"></span>Header
-          </span>
-          <span style="font-size:11px;color:var(--text-muted)">
-            <span style="display:inline-block;width:10px;height:10px;background:#1e2530;border:1px dashed #30363d;border-radius:2px;margin-right:3px;"></span>Free
-          </span>
-          <span style="font-size:11px;color:var(--text-muted)">
-            <span style="display:inline-block;width:10px;height:10px;background:#2a1d4a;border-radius:2px;margin-right:3px;"></span>Other
-          </span>
-          <span style="font-size:11px;color:var(--text-muted)">
-            <span id="doc-legend" style="display:inline-block;width:10px;height:10px;background:#3b82f6;border-radius:2px;margin-right:3px;"></span>Document
-          </span>
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:12px;">
+        <div class="card-title" style="margin:0">Block Map</div>
+        <div class="legend">
+          <span><i style="background:var(--header)"></i>Header</span>
+          <span><i style="background:var(--catalog)"></i>Catalog</span>
+          <span><i style="background:var(--primary-idx)"></i>Primary idx</span>
+          <span><i style="background:var(--secondary-idx)"></i>Secondary idx</span>
+          <span><i style="background:var(--live)"></i>Live node</span>
+          <span><i style="border:1px dashed var(--free)"></i>Free hole</span>
+          <span><i style="border:1px dashed var(--orphan)"></i>Orphan</span>
         </div>
       </div>
-      <div class="block-grid" id="block-grid">
-        <div style="color:var(--text-muted);font-size:13px;padding:20px;">Loading heap…</div>
-      </div>
+      <div class="grid" id="grid"><div class="empty">Loading…</div></div>
+      <div class="label-sm" style="margin-top:10px;">Click any block to decode exactly what it stores.</div>
     </div>
 
-    <!-- free list chain -->
+    <!-- block contents -->
+    <div class="card">
+      <div class="card-title">Block Contents <span id="bc-which" style="color:var(--text);text-transform:none;font-weight:400;"></span></div>
+      <div id="block-content"><div class="empty">Click a block in the map above to inspect its decoded contents.</div></div>
+    </div>
+
+    <!-- free list -->
     <div class="card">
       <div class="card-title">Free List Chain (linked list of holes)</div>
-      <div class="freelist-chain" id="freelist-chain">
-        <span style="color:var(--text-muted)">No free blocks</span>
-      </div>
-      <div style="margin-top:8px;font-size:11px;color:var(--text-muted)">
-        Block 0 holds the head pointer. Each free block's first 4 bytes point to the next free block.
+      <div class="chain" id="chain"><span class="empty">No free-list holes</span></div>
+      <div class="label-sm" style="margin-top:8px;">
+        Block 0 stores the head pointer; each free block's first 4 bytes point to the next.
+        <strong>Orphans</strong> are live-looking blocks the B+ tree dropped without re-linking here — only shrink's tree-walk finds them.
       </div>
     </div>
 
-    <!-- tech details accordion -->
+    <!-- tech details -->
     <div class="card">
-      <div class="details-toggle" onclick="toggleDetails()">
-        <span id="details-arrow">▶</span>
-        <span>Technical Details — raw block map & inspect JSON</span>
-      </div>
-      <div class="details-body" id="details-body">
-        <pre id="tech-json">No data yet.</pre>
-      </div>
+      <details class="details">
+        <summary>Technical details — raw inspect JSON</summary>
+        <pre id="tech">No data yet.</pre>
+      </details>
     </div>
   </div>
 
-  <!-- ── SIDEBAR ────────────────────────────────────────── -->
+  <!-- sidebar -->
   <div class="sidebar">
-
-    <!-- insert -->
-    <div class="sidebar-section">
-      <div class="sidebar-title">Insert Document</div>
-      <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px;">Quick presets:</div>
-      <div class="preset-chips" id="presets">
-        <span class="chip" data-preset="alice">Alice</span>
-        <span class="chip" data-preset="bob">Bob</span>
-        <span class="chip" data-preset="charlie">Charlie</span>
-        <span class="chip" data-preset="diana">Diana</span>
-        <span class="chip" data-preset="eve">Eve</span>
-        <span class="chip" data-preset="frank">Frank</span>
-        <span class="chip" data-preset="grace">Grace</span>
-        <span class="chip" data-preset="henry">Henry</span>
+    <div>
+      <div class="s-title">Insert Document(s)</div>
+      <textarea id="f-json" spellcheck="false" rows="5"
+        style="width:100%;margin-top:8px;background:var(--surface2);border:1px solid var(--border);border-radius:5px;color:var(--text);font-family:monospace;font-size:12px;padding:8px;resize:vertical;outline:none;">{
+  "name": "Alice",
+  "role": "Engineer",
+  "salary": 95000
+}</textarea>
+      <div class="field" style="gap:8px;">
+        <label class="label-sm" style="flex:1;">Copies
+          <input type="number" id="f-count" value="1" min="1" max="500" style="width:100%;margin-top:3px;" /></label>
+        <label class="label-sm" style="flex:1;">Pad size (KB)
+          <input type="number" id="f-pad" value="0" min="0" max="2048" style="width:100%;margin-top:3px;" /></label>
       </div>
-      <div id="custom-fields" style="display:flex;flex-direction:column;gap:5px;margin-top:4px;">
-        <div class="field-row">
-          <input type="text" id="field-name" placeholder="name" value="" style="flex:none;width:70px;"/>
-          <input type="text" id="field-value" placeholder="value" value=""/>
-        </div>
-        <div class="field-row">
-          <input type="text" id="field-name2" placeholder="name" value="" style="flex:none;width:70px;"/>
-          <input type="text" id="field-value2" placeholder="value" value=""/>
-        </div>
+      <button class="btn-primary" id="btn-insert" onclick="insertDoc()">+ Insert</button>
+      <div class="label-sm" style="margin-top:6px;">
+        Each copy adds a key to the primary &amp; secondary B+ trees (the index file shown here).
+        <strong>Pad size</strong> bloats the document body — that payload lands in the separate
+        <em>heap</em> file (see the heap line in the stats), not the index.
       </div>
-      <button class="btn-primary" id="btn-insert" onclick="insertDocument()">
-        + Insert Document
-      </button>
     </div>
 
-    <hr style="border-color:var(--border);margin:0"/>
+    <div>
+      <div class="s-title">Documents (<span id="doc-count">0</span>)</div>
+      <div class="docs" id="docs"><div class="empty">Empty — insert a document to begin.</div></div>
+    </div>
 
-    <!-- selected document -->
-    <div class="sidebar-section">
-      <div class="sidebar-title">Selected Document</div>
-      <div class="selected-panel" id="selected-panel">
-        <div style="color:var(--text-muted);font-size:12px;">Click on a block to select</div>
+    <div>
+      <div class="s-title">Reclaim Space</div>
+      <div class="label-sm" style="margin-top:8px;">
+        <code>shrinkDatabase()</code> relocates the highest live blocks into the lowest free/orphan slots,
+        then truncates the file. Zero extra disk space.
       </div>
-      <button class="btn-danger" id="btn-delete" disabled onclick="deleteSelected()">
-        🗑 Delete Selected
-      </button>
+      <button class="btn-shrink" id="btn-shrink" onclick="runShrink()">↴ Run shrinkDatabase()</button>
     </div>
-
-    <hr style="border-color:var(--border);margin:0"/>
-
-    <!-- compaction -->
-    <div class="sidebar-section">
-      <div class="sidebar-title">Compaction</div>
-      <div style="font-size:11px;color:var(--text-muted);line-height:1.5;margin-bottom:6px;">
-        Rebuilds the heap from scratch — discards all free blocks and rewrites only live documents.
-        Requires 2× disk space temporarily.
-      </div>
-      <button class="btn-success" id="btn-compact" onclick="runCompact()">
-        ⚡ Compact Database
-      </button>
-      <div style="font-size:11px;color:var(--text-muted);line-height:1.5;margin-top:6px;">
-        Relocates live blocks in-place into free slots, then truncates. Zero extra disk space.
-      </div>
-      <button class="btn-warning" id="btn-shrink" onclick="runShrink()">
-        ↤ Shrink Index File
-      </button>
-    </div>
-
-    <hr style="border-color:var(--border);margin:0"/>
-
-    <!-- demo script -->
-    <div class="sidebar-section">
-      <div class="sidebar-title">Presentation</div>
-      <button class="btn-purple" onclick="startDemoScript()">
-        ▶ Play Demo Script
-      </button>
-      <button class="btn-neutral" id="btn-reset" onclick="resetDemo()" style="margin-top:4px;">
-        ↺ Reset Demo Collection
-      </button>
-    </div>
-
-    <hr style="border-color:var(--border);margin:0"/>
-
-    <!-- collection picker -->
-    <div class="sidebar-section">
-      <div class="sidebar-title">Collection</div>
-      <input type="text" id="collection-input" value="_demo" placeholder="_demo"/>
-      <button class="btn-neutral" onclick="changeCollection()">Switch</button>
-    </div>
-
   </div>
 
-  <!-- ── ACTIVITY LOG ──────────────────────────────────── -->
   <div class="log-panel">
-    <div class="log-title">Activity Log</div>
-    <div class="log-entries" id="log-entries">
-      <div class="log-entry">
-        <span class="log-time">—</span>
-        <span class="log-icon">🔵</span>
-        <span class="log-msg">Waiting for connection…</span>
-      </div>
-    </div>
-  </div>
-
-</div>
-
-<!-- tooltip -->
-<div class="tooltip" id="tooltip" style="opacity:0;pointer-events:none;"></div>
-
-<!-- demo script modal -->
-<div class="demo-modal-backdrop" id="demo-modal" style="display:none">
-  <div class="demo-modal">
-    <h2>▶ Play Demo Script</h2>
-    <p>
-      This will <strong>reset</strong> the demo collection and replay a scripted sequence:
-      insert 6 employees, delete 3 to create fragmentation, then compact.
-    </p>
-    <div class="demo-modal-btns">
-      <button class="btn-neutral" style="flex:1" onclick="closeDemoModal()">Cancel</button>
-      <button class="btn-purple" style="flex:1" onclick="runDemoScript()">▶ Start</button>
-    </div>
+    <div class="log-title">Activity Log — what the database actually did</div>
+    <div id="log"></div>
   </div>
 </div>
+
+<div class="tooltip" id="tooltip"></div>
 
 <script>
-/* ═══════════════════════════════════════════════════════════
-   STATE
-═══════════════════════════════════════════════════════════ */
-const COLLECTION = { name: '_demo' };
-const DOC_COLORS = [
-  '#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6',
-  '#ec4899','#06b6d4','#f97316','#84cc16','#14b8a6',
-  '#60a5fa','#34d399','#fbbf24','#f87171','#a78bfa',
-];
-const PRESETS = {
-  alice:   { name: 'Alice',   role: 'Engineer',  salary: 95000 },
-  bob:     { name: 'Bob',     role: 'Designer',  salary: 82000 },
-  charlie: { name: 'Charlie', role: 'Manager',   salary: 120000 },
-  diana:   { name: 'Diana',   role: 'Engineer',  salary: 98000 },
-  eve:     { name: 'Eve',     role: 'Sales',     salary: 75000 },
-  frank:   { name: 'Frank',   role: 'DevOps',    salary: 88000 },
-  grace:   { name: 'Grace',   role: 'HR',        salary: 72000 },
-  henry:   { name: 'Henry',   role: 'Finance',   salary: 91000 },
+const COLLECTION = '_demo';
+const KIND_LABEL = {
+  header:'Header', catalog:'Catalog tree', collection:'Primary index',
+  index:'Secondary index', live:'Live B+ tree node', free:'Free hole', orphan:'Orphan',
 };
+const KIND_SHORT = { header:'H', catalog:'CAT', collection:'PK', index:'IDX', live:'●', free:'·', orphan:'✕' };
 
-let state = {
-  heapData:       null,
-  colorMap:       {},   // docId → color
-  colorIdx:       0,
-  selectedDocId:  null,
-  insertedDocs:   [],   // [{docId, name}] local tracking
-  busy:           false,
-};
+let busy = false;
+let lastData = null;
+let selectedBlockId = null;
 
-/* ═══════════════════════════════════════════════════════════
-   API HELPERS
-═══════════════════════════════════════════════════════════ */
+/* ── API ── */
 async function api(method, path, body) {
   const opts = { method, headers: { 'Content-Type': 'application/json' } };
   if (body) opts.body = JSON.stringify(body);
   const r = await fetch(path, opts);
   return r.json().catch(() => ({}));
 }
+const fetchIndex = () => api('GET', `/db/demo/index-inspect/${COLLECTION}`);
+const delay = (ms) => new Promise(r => setTimeout(r, ms));
 
-async function fetchHeap() {
-  return api('GET', `/db/demo/heap-inspect/${COLLECTION.name}`);
-}
-
-/* ═══════════════════════════════════════════════════════════
-   RENDER
-═══════════════════════════════════════════════════════════ */
-function getColor(docId) {
-  if (!state.colorMap[docId]) {
-    state.colorMap[docId] = DOC_COLORS[state.colorIdx % DOC_COLORS.length];
-    state.colorIdx++;
-  }
-  return state.colorMap[docId];
-}
-
-function docLabel(doc) {
-  if (!doc) return '?';
-  const d = doc.data || {};
-  const name = d.name || d.Name || d.title || Object.values(d)[0];
-  if (typeof name === 'string') return name.slice(0, 2).toUpperCase();
-  return '?';
-}
-
-function docDisplayName(doc) {
-  if (!doc) return doc?.docId?.slice(0,8) || '?';
-  const d = doc.data || {};
-  return d.name || d.Name || d.title || Object.values(d)[0] || doc.docId?.slice(0,8);
-}
-
-function renderHeap(data, animate = false) {
-  state.heapData = data;
-  const grid = document.getElementById('block-grid');
-  const docMap = {};
-  (data.documents || []).forEach(d => docMap[d.docId] = d);
-
-  // stats
-  document.getElementById('stat-total').textContent = data.totalBlocks;
-  document.getElementById('stat-size').textContent   = fmtBytes(data.fileSizeBytes);
-  document.getElementById('stat-live').textContent   = data.liveBlockCount;
-  document.getElementById('stat-docs').textContent   = `${(data.documents||[]).length} docs`;
-  document.getElementById('stat-free').textContent   = data.freeBlockCount;
-  document.getElementById('stat-free-bytes').textContent = fmtBytes(data.freeBlockCount * data.blockSize) + ' wasted';
-  document.getElementById('stat-other').textContent  = data.otherBlockCount;
-  const fPct = data.fragmentationPct || 0;
-  document.getElementById('stat-frag').textContent   = fPct + '%';
+/* ── render ── */
+function render(data, animate = false) {
+  lastData = data;
+  document.getElementById('s-total').textContent  = data.totalBlocks;
+  document.getElementById('s-size').textContent   = fmt(data.fileSizeBytes);
+  document.getElementById('s-live').textContent   = data.liveCount;
+  document.getElementById('s-free').textContent   = data.freeListCount;
+  document.getElementById('s-orphan').textContent = data.orphanCount;
+  document.getElementById('s-frag').textContent   = data.fragmentationPct + '%';
   const fill = document.getElementById('frag-fill');
-  fill.style.width = fPct + '%';
-  fill.style.background = fPct > 60 ? 'var(--danger)' : fPct > 30 ? 'var(--warning)' : 'var(--success)';
+  fill.style.width = data.fragmentationPct + '%';
+  fill.style.background = data.fragmentationPct > 50 ? 'var(--orphan)'
+                        : data.fragmentationPct > 20 ? 'var(--live)' : 'var(--primary-idx)';
+
+  // heap summary
+  const heap = data.heap || {};
+  document.getElementById('heap-summary').textContent =
+    `${heap.docCount ?? 0} document blob(s), ${fmt(heap.payloadBytes ?? 0)} of payload`;
 
   // grid
-  const existingBlocks = {};
-  grid.querySelectorAll('.block').forEach(el => {
-    existingBlocks[el.dataset.blockId] = el;
-  });
-
-  const newEl = document.createElement('div');
-  newEl.style.display = 'flex';
-  newEl.style.flexWrap = 'wrap';
-  newEl.style.gap = '5px';
-  newEl.style.padding = '4px';
-
+  const grid = document.getElementById('grid');
+  const prev = {};
+  grid.querySelectorAll('.block').forEach(el => prev[el.dataset.id] = el.dataset.kind);
+  grid.innerHTML = '';
   (data.blocks || []).forEach(b => {
     const el = document.createElement('div');
-    el.className = 'block';
-    el.dataset.blockId = b.id;
-    el.dataset.type = b.type;
-    if (b.docId) el.dataset.docId = b.docId;
-
-    const idEl = document.createElement('div');
-    idEl.className = 'block-id';
-    idEl.textContent = b.id;
-    const lblEl = document.createElement('div');
-    lblEl.className = 'block-label';
-
-    if (b.type === 'header') {
-      el.classList.add('block-header');
-      lblEl.textContent = 'H';
-    } else if (b.type === 'free') {
-      el.classList.add('block-free');
-      lblEl.textContent = '·';
-    } else if (b.type === 'other') {
-      el.classList.add('block-other');
-      lblEl.textContent = '⊞';
-    } else if (b.type === 'document') {
-      const doc = docMap[b.docId];
-      const color = getColor(b.docId);
-      el.style.background = color;
-      el.style.color = '#fff';
-      lblEl.textContent = docLabel(doc);
-    }
-
-    if (b.docId && b.docId === state.selectedDocId) {
-      el.classList.add('selected');
-    }
-
-    el.appendChild(idEl);
-    el.appendChild(lblEl);
-
-    const isNew = animate && !existingBlocks[b.id];
-    if (isNew) el.classList.add('block-enter');
-
-    el.addEventListener('click',       () => selectBlock(b));
-    el.addEventListener('mouseenter',  (e) => showTooltip(e, b, docMap));
-    el.addEventListener('mouseleave',  hideTooltip);
-    newEl.appendChild(el);
+    el.className = `block b-${b.kind}`;
+    el.dataset.id = b.id;
+    el.dataset.kind = b.kind;
+    el.innerHTML = `<div class="bid">${b.id}</div><div class="blabel">${KIND_SHORT[b.kind] || '?'}</div>`;
+    if (animate && (prev[b.id] === undefined || prev[b.id] !== b.kind)) el.classList.add('b-enter');
+    if (b.id === selectedBlockId) el.classList.add('sel');
+    el.addEventListener('mouseenter', e => showTip(e, b));
+    el.addEventListener('mousemove', posTip);
+    el.addEventListener('mouseleave', hideTip);
+    el.addEventListener('click', () => selectBlock(b.id));
+    grid.appendChild(el);
   });
 
-  grid.innerHTML = '';
-  Array.from(newEl.children).forEach(c => grid.appendChild(c));
+  // refresh the open block-content panel against the latest data
+  if (selectedBlockId != null) {
+    const b = (data.blocks || []).find(x => x.id === selectedBlockId);
+    if (b) renderBlockContent(b); else { selectedBlockId = null; clearBlockContent(); }
+  }
 
   // free list chain
-  renderFreeList(data.freeBlockIds || []);
-
-  // tech details
-  document.getElementById('tech-json').textContent = JSON.stringify(data, null, 2);
-}
-
-function renderFreeList(freeIds) {
-  const el = document.getElementById('freelist-chain');
-  if (!freeIds.length) {
-    el.innerHTML = '<span style="color:var(--text-muted)">No free blocks — zero fragmentation</span>';
-    return;
+  const chain = document.getElementById('chain');
+  const ids = data.freeListIds || [];
+  if (!ids.length) {
+    chain.innerHTML = '<span class="empty">No free-list holes' +
+      (data.orphanCount ? ` — but ${data.orphanCount} orphan block(s) shrink can still reclaim` : '') + '</span>';
+  } else {
+    chain.innerHTML = '<span class="node">head</span><span class="arrow">→</span>' +
+      ids.map(id => `<span class="node">#${id}</span>`).join('<span class="arrow">→</span>') +
+      '<span class="arrow">→</span><span class="null">NULL</span>';
   }
-  const parts = [];
-  freeIds.forEach((id, i) => {
-    parts.push(`<span class="chain-node">${id}</span>`);
-    if (i < freeIds.length - 1) parts.push('<span class="chain-arrow">→</span>');
-  });
-  parts.push('<span class="chain-arrow">→</span><span class="chain-null">NULL</span>');
-  el.innerHTML = parts.join('');
-}
 
-/* ═══════════════════════════════════════════════════════════
-   TOOLTIP
-═══════════════════════════════════════════════════════════ */
-function showTooltip(e, block, docMap) {
-  const tt = document.getElementById('tooltip');
-  let html = `<div class="tooltip-title">Block ${block.id}</div>`;
-  html += `<div class="tooltip-row"><span class="tooltip-key">type</span><span class="tooltip-val">${block.type}</span></div>`;
-  if (block.type === 'document') {
-    const doc = docMap[block.docId];
-    html += `<div class="tooltip-row"><span class="tooltip-key">docId</span><span class="tooltip-val">${block.docId.slice(0,12)}…</span></div>`;
-    if (doc?.data) {
-      Object.entries(doc.data).filter(([k]) => k !== 'id').forEach(([k,v]) => {
-        html += `<div class="tooltip-row"><span class="tooltip-key">${k}</span><span class="tooltip-val">${v}</span></div>`;
-      });
-      const chains = doc.blockIds?.length > 1 ? doc.blockIds.join('→') : doc.startBlockId;
-      html += `<div class="tooltip-row"><span class="tooltip-key">blocks</span><span class="tooltip-val">${chains}</span></div>`;
-    }
-  } else if (block.type === 'free') {
-    html += `<div style="color:var(--text-muted);font-size:11px;margin-top:4px;">This slot is in the free list and will be reused on the next insert.</div>`;
-  } else if (block.type === 'header') {
-    html += `<div style="color:var(--text-muted);font-size:11px;margin-top:4px;">Block 0 stores the free-list head pointer and the heap's JSON metadata header.</div>`;
-  }
-  tt.innerHTML = html;
-  tt.style.opacity = '1';
-  posTooltip(e);
-}
-function posTooltip(e) {
-  const tt = document.getElementById('tooltip');
-  const pad = 12;
-  let x = e.clientX + pad, y = e.clientY + pad;
-  const r = tt.getBoundingClientRect();
-  if (x + r.width  > window.innerWidth)  x = e.clientX - r.width  - pad;
-  if (y + r.height > window.innerHeight) y = e.clientY - r.height - pad;
-  tt.style.left = x + 'px'; tt.style.top = y + 'px';
-}
-function hideTooltip() { document.getElementById('tooltip').style.opacity = '0'; }
-
-/* ═══════════════════════════════════════════════════════════
-   SELECT
-═══════════════════════════════════════════════════════════ */
-function selectBlock(block) {
-  if (block.type !== 'document') {
-    state.selectedDocId = null;
-    renderSelectedPanel(null);
-    document.getElementById('btn-delete').disabled = true;
-    document.querySelectorAll('.block.selected').forEach(e => e.classList.remove('selected'));
-    return;
-  }
-  state.selectedDocId = block.docId;
-  document.querySelectorAll('.block.selected').forEach(e => e.classList.remove('selected'));
-  document.querySelectorAll(`.block[data-doc-id="${block.docId}"]`).forEach(e => e.classList.add('selected'));
-  document.getElementById('btn-delete').disabled = false;
-
-  const doc = (state.heapData?.documents || []).find(d => d.docId === block.docId);
-  renderSelectedPanel(doc);
-}
-
-function renderSelectedPanel(doc) {
-  const el = document.getElementById('selected-panel');
-  if (!doc) {
-    el.innerHTML = '<div style="color:var(--text-muted);font-size:12px;">Click on a block to select</div>';
-    return;
-  }
-  const color = getColor(doc.docId);
-  let html = `
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
-      <div style="width:14px;height:14px;border-radius:3px;background:${color};flex-shrink:0;"></div>
-      <div class="doc-name">${docDisplayName(doc)}</div>
-    </div>`;
-  if (doc.data) {
-    Object.entries(doc.data).filter(([k]) => k !== 'id').forEach(([k,v]) => {
-      html += `<div class="doc-field"><span class="fkey">${k}:</span><span>${v}</span></div>`;
+  // documents
+  const docs = document.getElementById('docs');
+  const list = data.documents || [];
+  document.getElementById('doc-count').textContent = list.length;
+  if (!list.length) {
+    docs.innerHTML = '<div class="empty">Empty — insert a document to begin.</div>';
+  } else {
+    docs.innerHTML = '';
+    list.forEach(d => {
+      const data2 = d.data || {};
+      const name = data2.name || data2.title || d.docId.slice(0, 8);
+      const meta = Object.entries(data2)
+        .filter(([k]) => k !== 'id' && k !== 'name' && k !== '_filler')
+        .map(([k, v]) => `${k}: ${String(v).slice(0, 30)}`).join(' · ');
+      const sizeTag = d.sizeBytes ? ` · ${fmt(d.sizeBytes)}` : '';
+      const padTag = data2._filler ? ' · padded' : '';
+      const row = document.createElement('div');
+      row.className = 'doc';
+      row.innerHTML = `<div class="info"><div class="name">${esc(name)}</div>` +
+        `<div class="meta">${esc(meta)}${sizeTag}${padTag}</div><div class="id">${d.docId}</div></div>`;
+      const btn = document.createElement('button');
+      btn.className = 'btn-mini';
+      btn.textContent = 'Delete';
+      btn.onclick = () => deleteDoc(d.docId, name);
+      row.appendChild(btn);
+      docs.appendChild(row);
     });
   }
-  html += `<div class="doc-id" style="margin-top:6px;">${doc.docId}</div>`;
-  html += `<div style="font-size:11px;color:var(--text-muted);margin-top:4px;">Heap blocks: [${doc.blockIds?.join(', ') || doc.startBlockId}]</div>`;
-  el.innerHTML = html;
+
+  document.getElementById('tech').textContent = JSON.stringify(data, null, 2);
 }
 
-/* ═══════════════════════════════════════════════════════════
-   OPERATIONS
-═══════════════════════════════════════════════════════════ */
-async function insertDocument() {
-  if (state.busy) return;
-  const n1 = document.getElementById('field-name').value.trim();
-  const v1 = document.getElementById('field-value').value.trim();
-  const n2 = document.getElementById('field-name2').value.trim();
-  const v2 = document.getElementById('field-value2').value.trim();
-  if (!n1 || !v1) { addLog('⚠️', 'Fill in at least one field (name + value)', 'warn'); return; }
-  const doc = {};
-  if (n1 && v1) doc[n1] = isNaN(v1) ? v1 : Number(v1);
-  if (n2 && v2) doc[n2] = isNaN(v2) ? v2 : Number(v2);
-  setBusy(true);
-  addLog('⏳', `Inserting document <span class="highlight">${JSON.stringify(doc)}</span>…`);
+/* ── tooltip ── */
+function showTip(e, b) {
+  const tt = document.getElementById('tooltip');
+  tt.innerHTML = `<div class="tt-title">Block ${b.id}</div>` +
+    `<div class="tt-row"><span class="tt-k">kind</span><span>${KIND_LABEL[b.kind] || b.kind}</span></div>` +
+    (b.kind === 'orphan' ? `<div class="label-sm" style="margin-top:4px">Abandoned by the B+ tree, not on the free list. shrink reclaims it.</div>` :
+     b.kind === 'free'   ? `<div class="label-sm" style="margin-top:4px">A hole on the free list, reused on the next allocation.</div>` :
+     b.kind === 'header' ? `<div class="label-sm" style="margin-top:4px">Block 0: free-list head pointer + DB header JSON.</div>` :
+     `<div class="label-sm" style="margin-top:4px">Live B+ tree node — shrink keeps it, may relocate it to a lower slot.</div>`);
+  tt.style.opacity = '1';
+  posTip(e);
+}
+function posTip(e) {
+  const tt = document.getElementById('tooltip');
+  const pad = 12; let x = e.clientX + pad, y = e.clientY + pad;
+  const r = tt.getBoundingClientRect();
+  if (x + r.width > innerWidth) x = e.clientX - r.width - pad;
+  if (y + r.height > innerHeight) y = e.clientY - r.height - pad;
+  tt.style.left = x + 'px'; tt.style.top = y + 'px';
+}
+const hideTip = () => document.getElementById('tooltip').style.opacity = '0';
+
+/* ── block content panel ── */
+function selectBlock(id) {
+  selectedBlockId = id;
+  document.querySelectorAll('.block.sel').forEach(el => el.classList.remove('sel'));
+  const el = document.querySelector(`.block[data-id="${id}"]`);
+  if (el) el.classList.add('sel');
+  const b = (lastData?.blocks || []).find(x => x.id === id);
+  if (b) renderBlockContent(b);
+}
+function clearBlockContent() {
+  document.getElementById('bc-which').textContent = '';
+  document.getElementById('block-content').innerHTML =
+    '<div class="empty">Click a block in the map above to inspect its decoded contents.</div>';
+}
+function renderBlockContent(b) {
+  document.getElementById('bc-which').textContent = `— block ${b.id} · ${KIND_LABEL[b.kind] || b.kind}`;
+  const host = document.getElementById('block-content');
+  const c = b.content;
+  if (!c) { host.innerHTML = '<div class="bc-note">No decoded content for this block.</div>'; return; }
+
+  if (c.role === 'header') {
+    const h = c.header || {};
+    const colls = h.collections || {};
+    let html = `<div class="bc-meta"><div><span class="k">free-list head</span><b>${c.freeListHead === 0 ? 'NULL (0)' : '#' + c.freeListHead}</b></div>` +
+      `<div><span class="k">catalog root</span><b>block ${h.catalogRootBlockId}</b></div></div>`;
+    const rows = Object.entries(colls).map(([name, m]) =>
+      `<tr><td>${esc(name)}</td><td class="v">root block ${m.rootBlockId}</td>` +
+      `<td>${Object.keys(m.indexes || {}).map(f => `<span class="bc-pill">${esc(f)} → blk ${m.indexes[f]}</span>`).join('') || '—'}</td></tr>`).join('');
+    html += `<table class="bc-kv"><tr><th>collection</th><th>primary root</th><th>secondary indexes</th></tr>${rows || '<tr><td colspan=3 class="bc-note">no collections</td></tr>'}</table>`;
+    host.innerHTML = html;
+    return;
+  }
+
+  if (c.role === 'btree-node') {
+    const keys = c.keys || [];
+    let meta = `<div class="bc-meta">` +
+      `<div><span class="k">tree</span><b>${esc(c.tree)}</b></div>` +
+      `<div><span class="k">node type</span><b>${esc(c.nodeType)}</b></div>` +
+      `<div><span class="k">keys</span><b>${c.keyCount}</b></div>` +
+      (c.chain && c.chain.length > 1 ? `<div><span class="k">spans blocks</span><b>${c.chain.join(' → ')}</b></div>` : '') +
+      `</div>`;
+    let body;
+    if (c.nodeType === 'leaf') {
+      const vals = c.values || [];
+      const rows = keys.map((k, i) =>
+        `<tr><td>${esc(fmtVal(k))}</td><td class="v">${esc(fmtVal(vals[i]))}</td></tr>`).join('');
+      body = `<table class="bc-kv"><tr><th>key</th><th>value (→ heap block / root)</th></tr>${rows || '<tr><td colspan=2 class="bc-note">empty</td></tr>'}</table>`;
+      if (c.nextLeafBlockId && c.nextLeafBlockId !== 0)
+        body += `<div class="bc-note" style="margin-top:6px;">next leaf → block ${c.nextLeafBlockId}</div>`;
+    } else {
+      const kids = c.childBlockIds || [];
+      body = `<div class="bc-note" style="margin-bottom:6px;">separator keys:</div>` +
+        keys.map(k => `<span class="bc-pill">${esc(fmtVal(k))}</span>`).join('') +
+        `<div class="bc-note" style="margin:8px 0 6px;">child blocks:</div>` +
+        kids.map(id => `<span class="bc-pill">block ${id}</span>`).join('');
+    }
+    host.innerHTML = meta + body + (c.keysTruncated ? '<div class="bc-note" style="margin-top:6px;">(keys truncated for display)</div>' : '');
+    return;
+  }
+
+  if (c.role === 'continuation') {
+    host.innerHTML = `<div class="bc-note">Continuation block of the B+ tree node starting at <b>block ${c.blobStart}</b> (spans ${(c.chain || []).join(' → ')}). Large nodes chain across multiple blocks via the 4-byte next pointer.</div>`;
+    return;
+  }
+  if (c.role === 'free') {
+    host.innerHTML = `<div class="bc-note">Free hole. Its first 4 bytes are the free-list next pointer → ` +
+      `<b>${c.nextFreePointer === 0 ? 'NULL (end of list)' : 'block ' + c.nextFreePointer}</b>. Reused on the next allocation.</div>`;
+    return;
+  }
+  if (c.role === 'orphan') {
+    host.innerHTML = `<div class="bc-note">${esc(c.description)}</div>`;
+    return;
+  }
+  host.innerHTML = `<div class="bc-note">${esc(c.description || 'Live block.')}</div>`;
+}
+function fmtVal(v) {
+  if (v === null || v === undefined) return '∅';
+  if (typeof v === 'object') return JSON.stringify(v);
+  const s = String(v);
+  return s.length > 60 ? s.slice(0, 57) + '…' : s;
+}
+
+/* ── poll until a condition holds (Raft propagation can lag a tick) ── */
+async function pollUntil(cond, maxMs = 5000, step = 300) {
+  const deadline = Date.now() + maxMs;
+  let data;
+  while (Date.now() < deadline) {
+    await delay(step);
+    try { data = await fetchIndex(); } catch { break; }
+    render(data, true);
+    if (cond(data)) return data;
+  }
+  return data || fetchIndex();
+}
+
+/* ── operations ── */
+async function insertDoc() {
+  if (busy) return;
+  let base;
   try {
-    await api('POST', `/db/${COLLECTION.name}`, doc);
-    await delay(600);
-    const data = await fetchHeap();
-    renderHeap(data, true);
-    const label = doc[n1] || Object.values(doc)[0];
-    addLog('✅', `Inserted <span class="highlight">"${label}"</span> → ${data.totalBlocks - (state.heapData?.totalBlocks || data.totalBlocks) + (data.liveBlockCount - (state.heapData?.liveBlockCount||data.liveBlockCount)) + data.liveBlockCount} live blocks`);
-    addLog('✅', `Inserted — heap now ${data.totalBlocks} blocks, ${data.freeBlockCount} free`);
-  } catch(e) { addLog('❌', 'Insert failed: ' + e.message); }
+    base = JSON.parse(document.getElementById('f-json').value);
+    if (!base || typeof base !== 'object' || Array.isArray(base)) throw new Error('must be a JSON object');
+  } catch (e) { log('⚠️', 'Invalid JSON: ' + (e.message || e)); return; }
+
+  const count = Math.max(1, Math.min(500, Number(document.getElementById('f-count').value) || 1));
+  const padKB = Math.max(0, Math.min(2048, Number(document.getElementById('f-pad').value) || 0));
+  const filler = padKB > 0 ? 'x'.repeat(padKB * 1024) : null;
+
+  const prevDocs = (lastData?.documents || []).length;
+  const prevBlocks = lastData?.totalBlocks ?? 0;
+  const prevHeap = lastData?.heap?.fileSizeBytes ?? 0;
+  setBusy(true);
+  const label = base.name ? esc(String(base.name)) : 'document';
+  log('⏳', `Inserting <span class="hl">${count}</span> ${count > 1 ? 'copies' : 'copy'} of ${label}` +
+    (padKB ? ` padded to ~<span class="hl">${padKB} KB</span>` : '') + ' → B+ trees…');
+  try {
+    const makeDoc = (i) => {
+      const doc = { ...base };
+      if (count > 1 && base.name != null) doc.name = `${base.name} #${prevDocs + i + 1}`;
+      if (filler) doc._filler = filler;
+      return doc;
+    };
+    if (count === 1) {
+      await api('POST', `/db/${COLLECTION}`, makeDoc(0));
+    } else {
+      // One Raft command for the whole batch (avoids the per-insert apply delay).
+      const documents = Array.from({ length: count }, (_, i) => makeDoc(i));
+      await api('POST', `/db/${COLLECTION}/insertMany`, { documents });
+    }
+    const data = await pollUntil(d => (d.documents?.length ?? 0) >= prevDocs + count, Math.max(5000, count * 200));
+    const grew = data.totalBlocks - prevBlocks;
+    const heapGrew = (data.heap?.fileSizeBytes ?? 0) - prevHeap;
+    log('✅', `Inserted <span class="hl">${count}</span> doc(s) — index file ` +
+      `${grew > 0 ? `grew <span class="hl">+${grew}</span> block(s) → ${data.totalBlocks}` : `unchanged at ${data.totalBlocks} (keys fit existing nodes)`}` +
+      (heapGrew > 0 ? `; heap +<span class="hl">${fmt(heapGrew)}</span>` : ''));
+  } catch (e) { log('❌', 'Insert failed: ' + (e.message || e)); }
   setBusy(false);
 }
 
-async function insertPreset(preset) {
-  if (state.busy) return;
-  const doc = { ...PRESETS[preset] };
+async function deleteDoc(docId, name) {
+  if (busy) return;
   setBusy(true);
-  addLog('⏳', `Inserting <span class="highlight">${doc.name}</span>…`);
+  const prevBlocks = lastData?.totalBlocks ?? 0;
+  const prevReclaim = lastData?.reclaimableCount ?? 0;
+  log('⏳', `Deleting <span class="hl">${esc(name)}</span> — removing key from the B+ trees…`);
   try {
-    await api('POST', `/db/${COLLECTION.name}`, doc);
-    await delay(400);
-    const data = await fetchHeap();
-    renderHeap(data, true);
-    // track local
-    const found = (data.documents||[]).find(d => d.data?.name === doc.name && !state.insertedDocs.find(x=>x.docId===d.docId));
-    if (found) state.insertedDocs.push({ docId: found.docId, name: doc.name });
-    addLog('✅', `Inserted <span class="highlight">${doc.name}</span> (${doc.role}, $${doc.salary.toLocaleString()})`);
-  } catch(e) { addLog('❌', 'Insert failed: ' + e.message); }
-  setBusy(false);
-}
-
-async function deleteSelected() {
-  if (state.busy || !state.selectedDocId) return;
-  const docId = state.selectedDocId;
-  const doc = (state.heapData?.documents||[]).find(d=>d.docId===docId);
-  const label = docDisplayName(doc) || docId.slice(0,8);
-  setBusy(true);
-
-  // animate blocks freeing
-  document.querySelectorAll(`.block[data-doc-id="${docId}"]`).forEach(el => {
-    el.classList.add('block-freeing');
-  });
-
-  addLog('⏳', `Deleting <span class="highlight">${label}</span>…`);
-  try {
-    await api('DELETE', `/db/${COLLECTION.name}/${docId}`);
-    await delay(600);
-    state.selectedDocId = null;
-    delete state.colorMap[docId];
-    state.insertedDocs = state.insertedDocs.filter(d=>d.docId!==docId);
-    document.getElementById('btn-delete').disabled = true;
-    const data = await fetchHeap();
-    renderHeap(data);
-    addLog('✅', `Deleted <span class="highlight">${label}</span> — blocks returned to free list`);
-    addLog('⚠️', `Fragmentation is now <span class="highlight">${data.fragmentationPct}%</span>`);
-  } catch(e) { addLog('❌', 'Delete failed: ' + e.message); }
-  setBusy(false);
-}
-
-async function runCompact() {
-  if (state.busy) return;
-  setBusy(true);
-  document.getElementById('btn-compact').innerHTML = '<span class="spinner"></span> Compacting…';
-  addLog('⏳', 'Starting <span class="highlight">compactDatabase</span>: rebuilding heap from scratch…');
-  try {
-    const before = state.heapData;
-    const result = await api('POST', '/db/compact');
-    await delay(300);
-    const after = await fetchHeap();
-    renderHeap(after, true);
-    const saved = (before?.fileSizeBytes||0) - (after?.fileSizeBytes||0);
-    addLog('✅', `Compact complete! <span class="highlight">${fmtBytes(before?.fileSizeBytes||0)} → ${fmtBytes(after?.fileSizeBytes||0)}</span>`);
-    addLog('🎉', `Saved <span class="highlight">${fmtBytes(saved)}</span> — ${result.collectionsCompacted||1} collection(s), ${result.totalDocuments||after.documents?.length||0} docs`);
-    showResultBanner(before?.fileSizeBytes||0, after?.fileSizeBytes||0, 'Compact');
-  } catch(e) { addLog('❌', 'Compact failed: ' + e.message); }
-  document.getElementById('btn-compact').textContent = '⚡ Compact Database';
+    await api('DELETE', `/db/${COLLECTION}/${docId}`);
+    const data = await pollUntil(d => !(d.documents || []).some(x => x.docId === docId));
+    const newReclaim = data.reclaimableCount - prevReclaim;
+    log('✅', `Deleted <span class="hl">${esc(name)}</span> — ` +
+      (newReclaim > 0
+        ? `freed <span class="hl">${newReclaim}</span> block(s); now ${data.freeListCount} hole(s) + ${data.orphanCount} orphan(s)`
+        : `tree rebalanced in place, ${data.reclaimableCount} reclaimable block(s) total`));
+    if (data.fragmentationPct > 0)
+      log('⚠️', `Index file is now <span class="hl">${data.fragmentationPct}%</span> reclaimable — run shrink to compact it`);
+  } catch (e) { log('❌', 'Delete failed: ' + (e.message || e)); }
   setBusy(false);
 }
 
 async function runShrink() {
-  if (state.busy) return;
+  if (busy) return;
   setBusy(true);
-  document.getElementById('btn-shrink').innerHTML = '<span class="spinner"></span> Shrinking…';
-  addLog('⏳', 'Starting <span class="highlight">shrinkDatabase</span>: in-place block relocation on index file…');
+  const btn = document.getElementById('btn-shrink');
+  btn.innerHTML = '<span class="spinner"></span> Shrinking…';
+  const before = lastData;
+  log('⏳', 'Running <span class="hl">shrinkDatabase()</span>: walk trees → build relocation table → relocate → truncate…');
   try {
-    const result = await api('POST', '/db/shrink');
+    const r = await api('POST', '/db/demo/shrink');
+    if (r && r.success === false) throw new Error(r.error || 'shrink failed');
     await delay(300);
-    const after = await fetchHeap();
-    renderHeap(after);
-    addLog('✅', `Shrink complete! ${result.blocksRelocated||0} blocks relocated, ${result.blocksFree||0} reclaimed`);
-    addLog('🔧', `Index file: <span class="highlight">${fmtBytes(result.sizeBefore||0)} → ${fmtBytes(result.sizeAfter||0)}</span>`);
-  } catch(e) { addLog('❌', 'Shrink failed: ' + e.message); }
-  document.getElementById('btn-shrink').textContent = '↤ Shrink Index File';
+    const after = await fetchIndex();
+    render(after, true);
+    log('✅', `shrink relocated <span class="hl">${r.blocksRelocated ?? 0}</span> live block(s) into reclaimable slots and reclaimed <span class="hl">${r.blocksFree ?? 0}</span> block(s)`);
+    log('🎉', `Index file truncated <span class="hl">${fmt(r.sizeBefore ?? before?.fileSizeBytes ?? 0)} → ${fmt(r.sizeAfter ?? after.fileSizeBytes)}</span> (${after.totalBlocks} blocks, ${after.fragmentationPct}% reclaimable)`);
+  } catch (e) { log('❌', 'Shrink failed: ' + (e.message || e)); }
+  btn.innerHTML = '↴ Run shrinkDatabase()';
   setBusy(false);
 }
 
-async function resetDemo() {
-  if (state.busy) return;
-  if (!confirm(`Delete all documents in collection "${COLLECTION.name}"?`)) return;
-  setBusy(true);
-  addLog('⏳', `Resetting collection <span class="highlight">${COLLECTION.name}</span>…`);
-  try {
-    // delete each document
-    const data = await fetchHeap();
-    for (const doc of data.documents || []) {
-      await api('DELETE', `/db/${COLLECTION.name}/${doc.docId}`);
-      await delay(80);
-    }
-    state.colorMap = {};
-    state.colorIdx = 0;
-    state.selectedDocId = null;
-    state.insertedDocs = [];
-    document.getElementById('btn-delete').disabled = true;
-    renderSelectedPanel(null);
-    await delay(300);
-    const fresh = await fetchHeap();
-    renderHeap(fresh);
-    addLog('✅', 'Demo collection reset — ready for a fresh demo');
-  } catch(e) { addLog('❌', 'Reset failed: ' + e.message); }
-  setBusy(false);
-}
-
-function changeCollection() {
-  const val = document.getElementById('collection-input').value.trim();
-  if (val) { COLLECTION.name = val; refresh(); }
-}
-
-/* ═══════════════════════════════════════════════════════════
-   DEMO SCRIPT
-═══════════════════════════════════════════════════════════ */
-let scriptRunning = false;
-
-function startDemoScript() { document.getElementById('demo-modal').style.display = 'flex'; }
-function closeDemoModal()   { document.getElementById('demo-modal').style.display = 'none'; }
-
-async function runDemoScript() {
-  closeDemoModal();
-  if (state.busy || scriptRunning) return;
-  scriptRunning = true;
-
-  // Reset first
-  await resetDemo();
-  await delay(500);
-
-  const steps = [
-    { type: 'narrate', text: '🧑‍💻  Let me show you how fragmentation builds up in SimpleDBMS…' },
-    { type: 'narrate', text: '📦  We start with an empty heap. Block 0 is always the metadata header.' },
-    { type: 'insert',  preset: 'alice',   delay: 700 },
-    { type: 'insert',  preset: 'bob',     delay: 700 },
-    { type: 'insert',  preset: 'charlie', delay: 700 },
-    { type: 'narrate', text: '✅  Three employees inserted. Each got their own block on the heap.' },
-    { type: 'insert',  preset: 'diana',   delay: 700 },
-    { type: 'insert',  preset: 'eve',     delay: 700 },
-    { type: 'insert',  preset: 'frank',   delay: 700 },
-    { type: 'narrate', text: '📊  Six documents in. The heap is densely packed — minimal waste.' },
-    { type: 'wait',    ms: 1500 },
-    { type: 'narrate', text: '🗑  Now let\'s delete Bob, Diana, and Frank…' },
-    { type: 'deleteByName', name: 'Bob',   delay: 900 },
-    { type: 'deleteByName', name: 'Diana', delay: 900 },
-    { type: 'deleteByName', name: 'Frank', delay: 900 },
-    { type: 'narrate', text: '👀  See those gray holes? Those blocks are wasted space.' },
-    { type: 'wait',    ms: 2000 },
-    { type: 'narrate', text: '💡  The free list chains these holes together so they can be reused.' },
-    { type: 'wait',    ms: 2000 },
-    { type: 'narrate', text: '⚡  But new inserts eventually spread the file. Let\'s compact!' },
-    { type: 'wait',    ms: 1500 },
-    { type: 'compact' },
-    { type: 'narrate', text: '🎉  Done! The heap was rebuilt from scratch — no more holes.' },
-    { type: 'wait',    ms: 3000 },
-    { type: 'narrate', text: '🔑  Key insight: compaction trades temporary 2× disk space for a permanently smaller file.' },
-  ];
-
-  for (const step of steps) {
-    if (!scriptRunning) break;
-    if (step.type === 'narrate')       { showNarrator(step.text); await delay(step.delay || 2500); }
-    else if (step.type === 'wait')     { await delay(step.ms); }
-    else if (step.type === 'insert')   { await insertPreset(step.preset); await delay(step.delay || 500); }
-    else if (step.type === 'deleteByName') { await deleteByName(step.name); await delay(step.delay || 600); }
-    else if (step.type === 'compact')  { await runCompact(); await delay(800); }
-  }
-
-  hideNarrator();
-  scriptRunning = false;
-}
-
-async function deleteByName(name) {
-  const data = await fetchHeap();
-  const doc = (data.documents||[]).find(d => d.data?.name === name);
-  if (!doc) { addLog('⚠️', `Could not find doc named "${name}"`); return; }
-  state.selectedDocId = doc.docId;
-  await deleteSelected();
-}
-
-let narratorTimer = null;
-function showNarrator(text) {
-  clearTimeout(narratorTimer);
-  let el = document.getElementById('narrator-el');
-  if (!el) {
-    el = document.createElement('div');
-    el.id = 'narrator-el';
-    el.className = 'narrator';
-    document.body.appendChild(el);
-  }
-  el.textContent = text;
-  el.style.opacity = '1';
-}
-function hideNarrator() {
-  const el = document.getElementById('narrator-el');
-  if (el) { el.style.opacity = '0'; setTimeout(() => el.remove(), 400); }
-}
-
-/* ═══════════════════════════════════════════════════════════
-   RESULT BANNER
-═══════════════════════════════════════════════════════════ */
-function showResultBanner(before, after, label) {
-  const saved = before - after;
-  const pct   = before > 0 ? Math.round((saved / before) * 100) : 0;
-  let el = document.getElementById('result-banner-el');
-  if (el) el.remove();
-  el = document.createElement('div');
-  el.id = 'result-banner-el';
-  el.className = 'result-banner';
-  el.innerHTML = `
-    <div style="font-size:12px;color:var(--text-muted);margin-bottom:4px;">${label} complete</div>
-    <div class="big">−${pct}% file size</div>
-    <div style="font-size:13px;margin-top:4px;">${fmtBytes(before)} → ${fmtBytes(after)}</div>
-    <div style="font-size:11px;color:var(--success);margin-top:2px;">saved ${fmtBytes(saved)}</div>
-  `;
-  document.body.appendChild(el);
-  setTimeout(() => { if (el.parentNode) el.remove(); }, 6000);
-}
-
-/* ═══════════════════════════════════════════════════════════
-   PRESET CHIPS
-═══════════════════════════════════════════════════════════ */
-let activePreset = null;
-document.addEventListener('DOMContentLoaded', () => {
-  document.querySelectorAll('.chip[data-preset]').forEach(chip => {
-    chip.addEventListener('click', () => {
-      const preset = chip.dataset.preset;
-      if (activePreset === preset) {
-        // deactivate
-        chip.classList.remove('active');
-        activePreset = null;
-        clearPresetFields();
-      } else {
-        document.querySelectorAll('.chip[data-preset]').forEach(c => c.classList.remove('active'));
-        chip.classList.add('active');
-        activePreset = preset;
-        fillPresetFields(preset);
-      }
-    });
-  });
-});
-
-function fillPresetFields(preset) {
-  const p = PRESETS[preset];
-  if (!p) return;
-  const keys = Object.keys(p);
-  document.getElementById('field-name').value  = keys[0] || '';
-  document.getElementById('field-value').value = p[keys[0]] || '';
-  document.getElementById('field-name2').value  = keys[1] || '';
-  document.getElementById('field-value2').value = p[keys[1]] || '';
-}
-function clearPresetFields() {
-  document.getElementById('field-name').value   = '';
-  document.getElementById('field-value').value  = '';
-  document.getElementById('field-name2').value  = '';
-  document.getElementById('field-value2').value = '';
-}
-
-/* ═══════════════════════════════════════════════════════════
-   LOG
-═══════════════════════════════════════════════════════════ */
-function addLog(icon, msg) {
-  const now = new Date().toLocaleTimeString('en', { hour12: false });
-  const el = document.getElementById('log-entries');
-  const entry = document.createElement('div');
-  entry.className = 'log-entry';
-  entry.innerHTML = `<span class="log-time">${now}</span><span class="log-icon">${icon}</span><span class="log-msg">${msg}</span>`;
-  el.prepend(entry);
-  if (el.children.length > 40) el.lastChild.remove();
-}
-
-/* ═══════════════════════════════════════════════════════════
-   UTILS
-═══════════════════════════════════════════════════════════ */
-function fmtBytes(n) {
-  if (n < 1024) return n + ' B';
-  if (n < 1024*1024) return (n/1024).toFixed(1) + ' KB';
-  return (n/1024/1024).toFixed(2) + ' MB';
-}
-function delay(ms) { return new Promise(r => setTimeout(r, ms)); }
+/* ── helpers ── */
 function setBusy(b) {
-  state.busy = b;
-  document.getElementById('btn-insert').disabled  = b;
-  document.getElementById('btn-compact').disabled = b;
-  document.getElementById('btn-shrink').disabled  = b;
-  document.getElementById('btn-reset').disabled   = b;
+  busy = b;
+  document.getElementById('btn-insert').disabled = b;
+  document.getElementById('btn-shrink').disabled = b;
+  document.querySelectorAll('.doc .btn-mini').forEach(x => x.disabled = b);
 }
-function toggleDetails() {
-  const body = document.getElementById('details-body');
-  const arrow = document.getElementById('details-arrow');
-  body.classList.toggle('open');
-  arrow.textContent = body.classList.contains('open') ? '▼' : '▶';
+function log(icon, msg) {
+  const el = document.getElementById('log');
+  const now = new Date().toLocaleTimeString('en', { hour12: false });
+  const e = document.createElement('div');
+  e.className = 'log-entry';
+  e.innerHTML = `<span class="log-time">${now}</span><span>${icon}</span><span class="log-msg">${msg}</span>`;
+  el.prepend(e);
+  while (el.children.length > 50) el.lastChild.remove();
 }
+function fmt(n) {
+  if (n == null) return '—';
+  if (n < 1024) return n + ' B';
+  if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' KB';
+  return (n / 1024 / 1024).toFixed(2) + ' MB';
+}
+function esc(s) { return String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
 
-/* ═══════════════════════════════════════════════════════════
-   INIT & POLL
-═══════════════════════════════════════════════════════════ */
+/* ── init ── */
 async function refresh() {
   try {
-    const data = await fetchHeap();
+    const data = await fetchIndex();
     if (data.ok === false) throw new Error(data.error);
-    renderHeap(data);
-    document.getElementById('status-dot').style.background  = 'var(--success)';
-    document.getElementById('status-text').textContent = `Connected · ${COLLECTION.name}`;
-  } catch(e) {
-    document.getElementById('status-dot').style.background  = 'var(--danger)';
+    render(data);
+    document.getElementById('dot').style.background = 'var(--primary-idx)';
+    document.getElementById('status-text').textContent = `Connected · ${COLLECTION}`;
+  } catch {
+    document.getElementById('dot').style.background = 'var(--orphan)';
     document.getElementById('status-text').textContent = 'Connection error';
   }
 }
-
-// Start
 refresh();
-addLog('🔵', 'Demo page loaded. Use the controls or click ▶ Play Demo Script.');
-// Poll every 5s when idle
-setInterval(() => { if (!state.busy && !scriptRunning) refresh(); }, 5000);
+log('🔵', 'Demo loaded. Insert documents, delete some to fragment the index, then run shrinkDatabase().');
+setInterval(() => { if (!busy) refresh(); }, 5000);
 </script>
 </body>
 </html>

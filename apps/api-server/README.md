@@ -92,8 +92,8 @@ Body: { text: "Find users older than 25" }
 POST /db/compact
 → { success: true }
 
-POST /db/shrink
-→ { success: true }
+POST /db/demo/shrink
+→ { success: true, blocksTotal, blocksFree, blocksRelocated, sizeBefore, sizeAfter }
 
 GET /api/getAllUserData
 → { data: {...} }

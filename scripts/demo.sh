@@ -18,6 +18,14 @@ cd "$ROOT"
 echo "Building..."
 npm run build
 
+# Wipe all generated DB state so every node starts from a clean slate.
+# The Raft log and SimpleDBMS files are recreated automatically.
+echo "Cleaning generated database state..."
+rm -rf "$ROOT/build/apps/data/generated-database"
+rm -rf "$ROOT/data/generated-database"
+mkdir -p "$ROOT/build/apps/data/generated-database"
+mkdir -p "$ROOT/data/generated-database"
+
 echo "Starting Raft cluster (nodes 1-3)..."
 node build/apps/api-server/spawnMany.mjs &
 SPAWN_PID=$!
